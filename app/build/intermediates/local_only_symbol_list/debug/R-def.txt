@@ -1,0 +1,29 @@
+R_DEF: Internal format may change without notice
+local
+color black
+color gray
+color purple_500
+color purple_700
+color teal_200
+color white
+drawable ic_launcher_background
+drawable ic_launcher_foreground
+id btnDownload
+id btnSearch
+id etSearch
+id ivAlbumArt
+id playerView
+id rvTracks
+id tvArtistName
+id tvTrackName
+layout activity_main
+layout item_track
+mipmap ic_launcher
+mipmap ic_launcher_round
+string app_name
+string download
+string play
+string search_hint
+style Theme.MusicPlayer
+xml backup_rules
+xml data_extraction_rules
