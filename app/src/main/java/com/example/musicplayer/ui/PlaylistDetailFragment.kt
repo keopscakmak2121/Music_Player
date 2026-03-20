@@ -17,6 +17,7 @@ import com.example.musicplayer.databinding.FragmentPlaylistDetailBinding
 import com.example.musicplayer.db.AppDatabase
 import com.example.musicplayer.db.PlaylistSongEntity
 import com.example.musicplayer.model.Track
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import retrofit2.Call
@@ -32,13 +33,24 @@ class PlaylistDetailFragment : Fragment() {
     private val binding get() = _binding!!
 
     var playlistId: Long = -1
+        set(value) {
+            field = value
+            if (isAdded) loadPlaylistSongs()
+        }
+        
     var playlistName: String = ""
+        set(value) {
+            field = value
+            if (isAdded) binding.tvPlaylistName.text = value
+        }
+
     var onBack: (() -> Unit)? = null
     var onTrackSelected: ((Track, String) -> Unit)? = null
 
     private lateinit var youtubeApi: YouTubeApi
     private lateinit var songAdapter: PlaylistSongAdapter
     private var songList: List<PlaylistSongEntity> = emptyList()
+    private var loadJob: Job? = null
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         _binding = FragmentPlaylistDetailBinding.inflate(inflater, container, false)
@@ -48,21 +60,19 @@ class PlaylistDetailFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         setupRetrofit()
-        val db = AppDatabase.getInstance(requireContext())
-
+        
         binding.tvPlaylistName.text = playlistName
         binding.btnBack.setOnClickListener { onBack?.invoke() }
 
         songAdapter = PlaylistSongAdapter(
             onClick = { song, index ->
                 val tracks = songList.map { it.toTrack() }
-                PlayerManager.currentQueue = tracks
-                PlayerManager.currentIndex = index
-                resolveAndPlay(song.toTrack())
+                PlayerManager.urlResolver = { track, cb -> resolveAndPlay(track, cb) }
+                PlayerManager.playQueue(tracks, index)
             },
             onRemove = { song ->
                 lifecycleScope.launch {
-                    db.playlistSongDao().deleteSong(song)
+                    AppDatabase.getInstance(requireContext()).playlistSongDao().deleteSong(song)
                     Toast.makeText(requireContext(), "Kaldırıldı", Toast.LENGTH_SHORT).show()
                 }
             }
@@ -71,7 +81,31 @@ class PlaylistDetailFragment : Fragment() {
         binding.rvSongs.layoutManager = LinearLayoutManager(requireContext())
         binding.rvSongs.adapter = songAdapter
 
-        lifecycleScope.launch {
+        binding.btnPlayAll.setOnClickListener {
+            if (songList.isEmpty()) return@setOnClickListener
+            PlayerManager.playMode = PlayMode.SEQUENTIAL
+            val tracks = songList.map { it.toTrack() }
+            PlayerManager.urlResolver = { track, cb -> resolveAndPlay(track, cb) }
+            PlayerManager.playQueue(tracks, 0)
+        }
+
+        binding.btnShuffle.setOnClickListener {
+            if (songList.isEmpty()) return@setOnClickListener
+            PlayerManager.playMode = PlayMode.SHUFFLE
+            val tracks = songList.map { it.toTrack() }
+            PlayerManager.urlResolver = { track, cb -> resolveAndPlay(track, cb) }
+            PlayerManager.playQueue(tracks, 0)
+        }
+
+        loadPlaylistSongs()
+    }
+
+    fun loadPlaylistSongs() {
+        if (playlistId == -1L) return
+        
+        loadJob?.cancel()
+        loadJob = lifecycleScope.launch {
+            val db = AppDatabase.getInstance(requireContext())
             db.playlistSongDao().getSongsInPlaylist(playlistId).collect { songs ->
                 songList = songs
                 songAdapter.submitList(songs)
@@ -79,20 +113,6 @@ class PlaylistDetailFragment : Fragment() {
                 binding.emptyView.visibility = if (songs.isEmpty()) View.VISIBLE else View.GONE
                 binding.rvSongs.visibility = if (songs.isEmpty()) View.GONE else View.VISIBLE
             }
-        }
-
-        binding.btnPlayAll.setOnClickListener {
-            if (songList.isEmpty()) return@setOnClickListener
-            PlayerManager.playMode = PlayMode.SEQUENTIAL
-            val tracks = songList.map { it.toTrack() }
-            PlayerManager.playQueue(tracks, 0) { track, cb -> resolveAndPlay(track, cb) }
-        }
-
-        binding.btnShuffle.setOnClickListener {
-            if (songList.isEmpty()) return@setOnClickListener
-            PlayerManager.playMode = PlayMode.SHUFFLE
-            val tracks = songList.map { it.toTrack() }
-            PlayerManager.playQueue(tracks, 0) { track, cb -> resolveAndPlay(track, cb) }
         }
     }
 
@@ -118,7 +138,6 @@ class PlaylistDetailFragment : Fragment() {
     }
 
     private fun resolveAndPlay(track: Track, callback: ((String) -> Unit)? = null) {
-        // Yerel dosya ise direkt çal
         if (isLocalFile(track.id)) {
             val url = track.id
             if (callback != null) callback(url)

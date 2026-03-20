@@ -15,12 +15,13 @@ object PlayerManager {
     private var shuffledIndices: List<Int> = emptyList()
 
     private var controller: MediaController? = null
+    var urlResolver: ((Track, (String) -> Unit) -> Unit)? = null
 
     fun attach(controller: MediaController) {
         this.controller = controller
         controller.addListener(object : Player.Listener {
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-                // handled externally
+                // handled externally or via onTrackChanged
             }
             override fun onPlaybackStateChanged(state: Int) {
                 if (state == Player.STATE_ENDED) {
@@ -30,17 +31,17 @@ object PlayerManager {
         })
     }
 
-    fun playQueue(tracks: List<Track>, startIndex: Int, urlResolver: (Track, (String) -> Unit) -> Unit) {
+    fun playQueue(tracks: List<Track>, startIndex: Int) {
         currentQueue = tracks
         currentIndex = startIndex
         if (playMode == PlayMode.SHUFFLE) {
             shuffledIndices = (tracks.indices).toMutableList().shuffled()
         }
         val track = currentQueue[currentIndex]
-        urlResolver(track) { url -> play(track, url) }
+        resolveAndPlay(track)
     }
 
-    fun playNext(urlResolver: ((Track, (String) -> Unit) -> Unit)? = null) {
+    fun playNext() {
         if (currentQueue.isEmpty()) return
         val nextIndex = when (playMode) {
             PlayMode.SEQUENTIAL -> {
@@ -54,10 +55,10 @@ object PlayerManager {
         }
         currentIndex = nextIndex
         val track = currentQueue[currentIndex]
-        urlResolver?.invoke(track) { url -> play(track, url) }
+        resolveAndPlay(track)
     }
 
-    fun playPrev(urlResolver: ((Track, (String) -> Unit) -> Unit)? = null) {
+    fun playPrev() {
         if (currentQueue.isEmpty()) return
         val prevIndex = when (playMode) {
             PlayMode.SEQUENTIAL -> {
@@ -71,7 +72,13 @@ object PlayerManager {
         }
         currentIndex = prevIndex
         val track = currentQueue[currentIndex]
-        urlResolver?.invoke(track) { url -> play(track, url) }
+        resolveAndPlay(track)
+    }
+
+    private fun resolveAndPlay(track: Track) {
+        urlResolver?.invoke(track) { url ->
+            play(track, url)
+        }
     }
 
     private fun play(track: Track, url: String) {

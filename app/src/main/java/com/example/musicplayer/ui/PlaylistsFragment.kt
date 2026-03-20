@@ -33,7 +33,9 @@ class PlaylistsFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
         val db = AppDatabase.getInstance(requireContext())
 
+        // Pass viewLifecycleOwner.lifecycleScope to adapter
         adapter = PlaylistAdapter(
+            scope = viewLifecycleOwner.lifecycleScope,
             onClick = { playlist -> onPlaylistClick?.invoke(playlist) },
             onDelete = { playlist ->
                 lifecycleScope.launch {
@@ -53,22 +55,6 @@ class PlaylistsFragment : Fragment() {
                 adapter.submitList(playlists)
                 binding.emptyView.visibility = if (playlists.isEmpty()) View.VISIBLE else View.GONE
                 binding.rvPlaylists.visibility = if (playlists.isEmpty()) View.GONE else View.VISIBLE
-
-                // Update song counts
-                playlists.forEach { playlist ->
-                    lifecycleScope.launch {
-                        db.playlistSongDao().getSongsInPlaylist(playlist.id).collect { songs ->
-                            val pos = adapter.currentList.indexOfFirst { it.id == playlist.id }
-                            if (pos >= 0) {
-                                binding.rvPlaylists.post {
-                                    val vh = binding.rvPlaylists.findViewHolderForAdapterPosition(pos)
-                                    val binding2 = (vh as? com.example.musicplayer.adapter.PlaylistAdapter.VH)?.binding
-                                    binding2?.tvSongCount?.text = "${songs.size} şarkı"
-                                }
-                            }
-                        }
-                    }
-                }
             }
         }
 

@@ -3,6 +3,7 @@ package com.example.musicplayer.ui
 import android.app.AlertDialog
 import android.app.DownloadManager
 import android.content.Context
+import android.media.MediaScannerConnection
 import android.net.Uri
 import android.os.Bundle
 import android.os.Environment
@@ -34,6 +35,7 @@ import retrofit2.Callback
 import retrofit2.Response
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
+import java.io.File
 import java.util.concurrent.TimeUnit
 
 class DiscoverFragment : Fragment() {
@@ -75,7 +77,8 @@ class DiscoverFragment : Fragment() {
         binding.btnModeShuffle.setOnClickListener { setPlayMode(PlayMode.SHUFFLE) }
         binding.btnPlayAll.setOnClickListener {
             if (currentTracks.isEmpty()) return@setOnClickListener
-            PlayerManager.playQueue(currentTracks, 0) { track, cb -> resolveAndPlay(track, cb) }
+            PlayerManager.urlResolver = { track, cb -> resolveAndPlay(track, cb) }
+            PlayerManager.playQueue(currentTracks, 0)
         }
 
         // Scroll ile daha fazla yükle
@@ -170,6 +173,7 @@ class DiscoverFragment : Fragment() {
                                 val index = currentTracks.indexOf(track)
                                 PlayerManager.currentIndex = index
                                 trackAdapter?.setPlayingPosition(index)
+                                PlayerManager.urlResolver = { t, cb -> resolveAndPlay(t, cb) }
                                 resolveAndPlay(track) { url -> onTrackSelected?.invoke(track, url) }
                             },
                             onDownloadClick = { track, position -> downloadAsMp3(track, position) },
@@ -288,13 +292,13 @@ class DiscoverFragment : Fragment() {
             val dm = requireContext().getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
             val downloadId = dm.enqueue(request)
             activeDownloads.add(downloadId)
-            startProgressPolling(dm, downloadId, position)
+            startProgressPolling(dm, downloadId, position, fileName)
         } catch (e: Exception) {
             Toast.makeText(requireContext(), "İndirme hatası: ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
 
-    private fun startProgressPolling(dm: DownloadManager, downloadId: Long, position: Int) {
+    private fun startProgressPolling(dm: DownloadManager, downloadId: Long, position: Int, fileName: String) {
         val poll = object : Runnable {
             override fun run() {
                 if (!activeDownloads.contains(downloadId)) return
@@ -317,22 +321,33 @@ class DiscoverFragment : Fragment() {
                             activeDownloads.remove(downloadId)
                             trackAdapter?.registerDownload(downloadId, position)
                             trackAdapter?.markCompleted(downloadId)
+                            
+                            // Sistemi yeni dosyadan haberdar et
+                            val musicDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC)
+                            val file = File(musicDir, fileName)
+                            if (file.exists()) {
+                                MediaScannerConnection.scanFile(
+                                    requireContext(),
+                                    arrayOf(file.absolutePath),
+                                    arrayOf("audio/mpeg"),
+                                    null
+                                )
+                            }
                         }
                         DownloadManager.STATUS_FAILED -> {
                             activeDownloads.remove(downloadId)
                             Toast.makeText(requireContext(), "İndirme başarısız", Toast.LENGTH_SHORT).show()
                         }
                     }
-                    cursor.close()
                 }
+                cursor?.close()
             }
         }
-        handler.postDelayed(poll, 800)
+        handler.post(poll)
     }
 
     override fun onDestroyView() {
         super.onDestroyView()
-        handler.removeCallbacksAndMessages(null)
         _binding = null
     }
 }

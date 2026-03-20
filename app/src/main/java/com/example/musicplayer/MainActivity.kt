@@ -1,10 +1,15 @@
 package com.example.musicplayer
 
+import android.Manifest
 import android.content.ComponentName
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.view.View
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import coil.load
@@ -33,16 +38,35 @@ class MainActivity : AppCompatActivity() {
     private val settingsFragment = SettingsFragment()
     private val playlistDetailFragment = PlaylistDetailFragment()
 
+    private val requestPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted: Boolean ->
+        if (!isGranted) {
+            Toast.makeText(this, "Bildirim izni verilmedi, kontrolcü görünmeyebilir.", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        checkPermissions()
         setupMediaController()
         setupFragments()
         setupBottomNav()
         setupMiniPlayer()
         wireCallbacks()
+    }
+
+    private fun checkPermissions() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) !=
+                PackageManager.PERMISSION_GRANTED
+            ) {
+                requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
     }
 
     private fun setupFragments() {
@@ -76,7 +100,14 @@ class MainActivity : AppCompatActivity() {
         val sessionToken = SessionToken(this, ComponentName(this, PlaybackService::class.java))
         controllerFuture = MediaController.Builder(this, sessionToken).buildAsync()
         controllerFuture?.addListener({
-            controller?.let { PlayerManager.attach(it) }
+            controller?.let { 
+                PlayerManager.attach(it)
+                // Set the URL resolver for PlayerManager to handle auto-next
+                PlayerManager.urlResolver = { track, callback ->
+                    // In this app, the track object already has the audio URL
+                    callback(track.audio)
+                }
+            }
             PlayerManager.onTrackChanged = { track -> updateMiniPlayer(track) }
         }, MoreExecutors.directExecutor())
     }
@@ -91,6 +122,10 @@ class MainActivity : AppCompatActivity() {
                 c.play()
                 binding.miniPlayerPlayPause.setImageResource(android.R.drawable.ic_media_pause)
             }
+        }
+        
+        binding.miniPlayer.setOnClickListener {
+            // Expand player logic could go here
         }
     }
 
@@ -107,9 +142,6 @@ class MainActivity : AppCompatActivity() {
                 .hide(playlistDetailFragment).show(playlistsFragment).commit()
             binding.bottomNav.selectedItemId = R.id.nav_playlists
         }
-
-        // PlayerManager next/prev also needs URL resolver
-        PlayerManager.onTrackChanged = { track -> updateMiniPlayer(track) }
     }
 
     private fun openPlaylistDetail(playlist: PlaylistEntity) {
@@ -137,13 +169,15 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateMiniPlayer(track: Track) {
-        binding.miniPlayer.visibility = View.VISIBLE
-        binding.miniPlayerTitle.text = track.name
-        binding.miniPlayerArtist.text = track.artistName
-        binding.miniPlayerPlayPause.setImageResource(android.R.drawable.ic_media_pause)
-        if (track.image.isNotEmpty()) {
-            binding.miniPlayerArt.load(track.image) {
-                transformations(RoundedCornersTransformation(8f))
+        runOnUiThread {
+            binding.miniPlayer.visibility = View.VISIBLE
+            binding.miniPlayerTitle.text = track.name
+            binding.miniPlayerArtist.text = track.artistName
+            binding.miniPlayerPlayPause.setImageResource(android.R.drawable.ic_media_pause)
+            if (track.image.isNotEmpty()) {
+                binding.miniPlayerArt.load(track.image) {
+                    transformations(RoundedCornersTransformation(8f))
+                }
             }
         }
     }

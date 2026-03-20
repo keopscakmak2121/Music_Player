@@ -51,7 +51,7 @@ class DownloadsFragment : Fragment() {
         binding.rvDownloads.adapter = DownloadedTrackAdapter(
             files,
             onPlayClick = { file ->
-                val track = Track(file.name, file.nameWithoutExtension, "Yerel Dosya", "", "", 0)
+                val track = Track(file.absolutePath, file.nameWithoutExtension, "Yerel Dosya", "", "", 0)
                 onFileSelected?.invoke(track, file.absolutePath)
             },
             onDeleteClick = { file, position ->
@@ -81,7 +81,8 @@ class DownloadsFragment : Fragment() {
                     .setItems(names) { _, index ->
                         val playlist = playlists[index]
                         lifecycleScope.launch {
-                            val already = db.playlistSongDao().isSongInPlaylist(playlist.id, file.name)
+                            // Kontrolü absolutePath ile yapıyoruz çünkü videoId olarak onu kaydediyoruz
+                            val already = db.playlistSongDao().isSongInPlaylist(playlist.id, file.absolutePath)
                             if (already > 0) {
                                 Toast.makeText(requireContext(), "Zaten listede", Toast.LENGTH_SHORT).show()
                                 return@launch
