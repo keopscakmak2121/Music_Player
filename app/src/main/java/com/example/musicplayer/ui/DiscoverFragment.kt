@@ -314,8 +314,14 @@ class DiscoverFragment : Fragment() {
     // ─── İndirme ─────────────────────────────────────────────
 
     private fun showDownloadOptions(track: Track, position: Int) {
+        // Zaten indiriliyor mu?
         if (activeDownloads.containsKey(track.id)) {
             Toast.makeText(requireContext(), "Bu şarkı zaten indiriliyor", Toast.LENGTH_SHORT).show()
+            return
+        }
+        // Zaten indirildi mi? (adapter state)
+        if (trackAdapter?.isDownloaded(position) == true) {
+            Toast.makeText(requireContext(), "Bu şarkı zaten indirildi", Toast.LENGTH_SHORT).show()
             return
         }
         val options = arrayOf("MP3 (Ses)", "MP4 (Video - 720p)", "MP4 (Video - 360p)")
@@ -535,10 +541,18 @@ class DiscoverFragment : Fragment() {
     }
 
     private fun showAddToPlaylistDialog(track: Track) {
+        val position = currentTracks.indexOf(track)
+        if (position < 0 || trackAdapter?.isDownloaded(position) != true) {
+            Toast.makeText(requireContext(), "Playlist'e sadece indirilmiş şarkılar eklenebilir", Toast.LENGTH_SHORT).show()
+            return
+        }
         lifecycleScope.launch {
             val playlists = AppDatabase.getInstance(requireContext())
                 .playlistDao().getAllPlaylists().first()
-            if (playlists.isEmpty()) return@launch
+            if (playlists.isEmpty()) {
+                Toast.makeText(requireContext(), "Önce Listeler sekmesinden playlist oluştur", Toast.LENGTH_SHORT).show()
+                return@launch
+            }
             val names = playlists.map { it.name }.toTypedArray()
             AlertDialog.Builder(requireContext()).setItems(names) { _, i ->
                 lifecycleScope.launch {
@@ -552,6 +566,7 @@ class DiscoverFragment : Fragment() {
                             duration = track.duration
                         )
                     )
+                    Toast.makeText(requireContext(), "\"${playlists[i].name}\" listesine eklendi", Toast.LENGTH_SHORT).show()
                 }
             }.show()
         }
