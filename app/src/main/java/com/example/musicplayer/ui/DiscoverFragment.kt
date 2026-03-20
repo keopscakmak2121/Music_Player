@@ -119,6 +119,78 @@ class DiscoverFragment : Fragment() {
         trackAdapter?.setPlayingPosition(index)
     }
 
+    /**
+     * MediaStore'daki Melodify dosyalarını okuyup adapter'ı senkronize eder.
+     * Uygulama açılınca veya yeni arama yapılınca çağrılır.
+     */
+    private fun syncDownloadedState() {
+        lifecycleScope.launch(Dispatchers.IO) {
+            val downloadedNames = getDownloadedFileNames()
+            withContext(Dispatchers.Main) {
+                currentTracks.forEachIndexed { index, track ->
+                    val safeName = track.name.take(50).replace(Regex("[/\\\\:*?\"<>|]"), "_")
+                    if (downloadedNames.contains("$safeName.mp3") ||
+                        downloadedNames.contains("$safeName.mp4")) {
+                        trackAdapter?.markCompletedByPosition(index)
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * İndirilenler sayfasından dosya silinince çağrılır.
+     * Dosya adı (uzantısız) ile track'i bulup adapter durumunu sıfırlar.
+     */
+    fun resetDownloadByPath(deletedFileName: String) {
+        val position = currentTracks.indexOfFirst { track ->
+            val safeName = track.name.take(50).replace(Regex("[/\\\\:*?\"<>|]"), "_")
+            safeName == deletedFileName
+        }
+        if (position >= 0) {
+            trackAdapter?.cancelDownload(position)
+        }
+    }
+
+    /** MediaStore'daki Music/Melodify ve Download/Melodify dosya adlarını döner */
+    private fun getDownloadedFileNames(): Set<String> {
+        val ctx = requireContext()
+        val names = mutableSetOf<String>()
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            // MP3
+            ctx.contentResolver.query(
+                MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                arrayOf(MediaStore.Audio.Media.DISPLAY_NAME),
+                "${MediaStore.Audio.Media.RELATIVE_PATH} LIKE ?",
+                arrayOf("Music/Melodify/%"), null
+            )?.use { c ->
+                while (c.moveToNext())
+                    c.getString(0)?.let { names.add(it) }
+            }
+            // MP4
+            ctx.contentResolver.query(
+                MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                arrayOf(MediaStore.Downloads.DISPLAY_NAME),
+                "${MediaStore.Downloads.RELATIVE_PATH} LIKE ?",
+                arrayOf("Download/Melodify/%"), null
+            )?.use { c ->
+                while (c.moveToNext())
+                    c.getString(0)?.let { names.add(it) }
+            }
+        } else {
+            listOf(
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC),
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+            ).forEach { dir ->
+                dir.walkTopDown()
+                    .filter { it.isFile && (it.extension == "mp3" || it.extension == "mp4") }
+                    .forEach { names.add(it.name) }
+            }
+        }
+        return names
+    }
+
     private fun setPlayMode(mode: PlayMode) {
         PlayerManager.playMode = mode
         updatePlayModeUI()
@@ -217,6 +289,8 @@ class DiscoverFragment : Fragment() {
                         )
                         binding.rvTracks.adapter = trackAdapter
                         binding.playModeBar.visibility = View.VISIBLE
+                        // MediaStore'daki indirilen dosyalarla senkronize et
+                        syncDownloadedState()
                     } else if (newTracks.isNotEmpty()) {
                         val startPos = currentTracks.size
                         currentTracks.addAll(newTracks)
@@ -275,14 +349,26 @@ class DiscoverFragment : Fragment() {
         val ctx = requireContext().applicationContext
 
         val job = lifecycleScope.launch(Dispatchers.IO) {
-            // Her coroutine kendi yerel state'ini tutar — eş zamanlı indirmelerde çakışma yok
             var mediaStoreUri: Uri? = null
             var legacyFile: File? = null
             var outputStream: OutputStream? = null
 
             try {
                 val req = Request.Builder().url(url).build()
-                val resp = downloadClient.newCall(req).execute()
+                val call = downloadClient.newCall(req)
+
+                // İptal flag'i set edilince OkHttp call'ını da iptal et
+                val cancelWatcher = launch {
+                    while (true) {
+                        if (cancelled.get()) { call.cancel(); break }
+                        kotlinx.coroutines.delay(200)
+                    }
+                }
+
+                val resp = call.execute()
+                cancelWatcher.cancel() // bağlantı kuruldu, watcher'a gerek yok
+
+                if (cancelled.get()) return@launch
 
                 if (!resp.isSuccessful) {
                     val msg = when (resp.code) {

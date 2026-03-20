@@ -219,6 +219,13 @@ class TrackAdapter(
         notifyItemChanged(position, PAYLOAD_PROGRESS)
     }
 
+    /** MediaStore sync için — downloadId olmadan pozisyon ile tamamlandı işaretle */
+    fun markCompletedByPosition(position: Int) {
+        if (progressMap[position] == -1) return  // zaten işaretli
+        progressMap[position] = -1
+        notifyItemChanged(position, PAYLOAD_PROGRESS)
+    }
+
     /** İptal için fakeId → position */
     fun positionForFakeId(fakeId: Long): Int? = downloadMap[fakeId]
 

@@ -39,6 +39,7 @@ class DownloadsFragment : Fragment() {
     private val binding get() = _binding!!
 
     var onFileSelected: ((Track, String) -> Unit)? = null
+    var onFileDeleted: ((String) -> Unit)? = null  // silinince videoId veya path bildir
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         _binding = FragmentDownloadsBinding.inflate(inflater, container, false)
@@ -70,12 +71,16 @@ class DownloadsFragment : Fragment() {
                 files.toMutableList(),
                 onPlayClick = { file ->
                     if (file.isVideo) {
-                        // MP4 → harici video player
                         openVideoPlayer(file)
                     } else {
-                        // MP3 → uygulama içi oynatıcı
+                        // Lokal MP3: URI üzerinden oynat (Android 10+'da path erişilemez olabilir)
+                        val playUri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                            file.uri.toString()
+                        } else {
+                            file.path
+                        }
                         val track = Track(file.path, file.name, "Yerel Dosya", "", "", 0)
-                        onFileSelected?.invoke(track, file.path)
+                        onFileSelected?.invoke(track, playUri)
                     }
                 },
                 onDeleteClick = { file, _ -> confirmDelete(file) },
@@ -196,6 +201,7 @@ class DownloadsFragment : Fragment() {
                     if (deleted) {
                         AppDatabase.getInstance(requireContext())
                             .playlistSongDao().deleteSongByVideoId(file.path)
+                        onFileDeleted?.invoke(file.name)  // dosya adını (uzantısız) gönder
                         loadDownloadedFiles()
                         Toast.makeText(requireContext(), "Silindi", Toast.LENGTH_SHORT).show()
                     } else {

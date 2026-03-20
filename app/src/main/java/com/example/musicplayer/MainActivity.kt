@@ -147,6 +147,7 @@ class MainActivity : AppCompatActivity() {
 
         discoverFragment.onTrackSelected = playCallback
         downloadsFragment.onFileSelected = playCallback
+        downloadsFragment.onFileDeleted = { path -> discoverFragment.resetDownloadByPath(path) }
         playlistDetailFragment.onTrackSelected = playCallback
 
         playlistsFragment.onPlaylistClick = { playlist -> openPlaylistDetail(playlist) }
