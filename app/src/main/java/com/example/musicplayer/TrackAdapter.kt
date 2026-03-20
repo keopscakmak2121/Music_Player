@@ -11,16 +11,25 @@ import coil.transform.RoundedCornersTransformation
 import com.example.musicplayer.databinding.ItemTrackBinding
 import com.example.musicplayer.model.Track
 
+// Payload türleri — tam rebind yerine sadece ilgili view güncellenir
+private const val PAYLOAD_PROGRESS = "progress"
+private const val PAYLOAD_PLAYING = "playing"
+
 class TrackAdapter(
     private val tracks: List<Track>,
     private val onTrackClick: (Track) -> Unit,
     private val onDownloadClick: (Track, Int) -> Unit,
-    private val onLongClick: ((Track) -> Unit)? = null
+    private val onLongClick: ((Track) -> Unit)? = null,
+    private val onCancelDownload: ((Long) -> Unit)? = null   // iptal callback'i
 ) : RecyclerView.Adapter<TrackAdapter.TrackViewHolder>() {
 
     private val downloadMap = mutableMapOf<Long, Int>()
     private val progressMap = mutableMapOf<Int, Int>() // -2=preparing, -1=done, 0-100=progress
     private var playingPosition: Int = -1
+
+    /** Pozisyon → downloadId ters haritası (iptal için) */
+    private fun downloadIdForPosition(position: Int): Long? =
+        downloadMap.entries.firstOrNull { it.value == position }?.key
 
     class TrackViewHolder(val binding: ItemTrackBinding) : RecyclerView.ViewHolder(binding.root)
 
@@ -29,35 +38,73 @@ class TrackAdapter(
         return TrackViewHolder(binding)
     }
 
+    // Payload varsa sadece ilgili kısmı güncelle, yoksa tam bind
+    override fun onBindViewHolder(holder: TrackViewHolder, position: Int, payloads: List<Any>) {
+        if (payloads.isEmpty()) {
+            onBindViewHolder(holder, position)
+            return
+        }
+        payloads.forEach { payload ->
+            when (payload) {
+                PAYLOAD_PROGRESS -> bindDownloadState(holder.binding, position)
+                PAYLOAD_PLAYING  -> bindPlayingState(holder.binding, position, tracks[position])
+            }
+        }
+    }
+
     override fun onBindViewHolder(holder: TrackViewHolder, position: Int) {
         val track = tracks[position]
-        val progress = progressMap[position]
-        val isPlaying = position == playingPosition
-
         holder.binding.apply {
             tvTrackName.text = track.name
             tvArtistName.text = track.artistName
             tvDuration.text = formatDuration(track.duration)
+            root.setOnClickListener { onTrackClick(track) }
+            root.setOnLongClickListener { onLongClick?.invoke(track); true }
 
-            // Album art veya play overlay
+            btnDownload.setOnClickListener {
+                val dlId = downloadIdForPosition(position)
+                val isDownloading = dlId != null && progressMap[position] != null && progressMap[position] != -1
+                if (isDownloading) {
+                    // İndirme devam ediyor → iptal dialog'u
+                    android.app.AlertDialog.Builder(holder.itemView.context)
+                        .setTitle("İndirmeyi İptal Et")
+                        .setMessage("\"${track.name}\" indirmesi iptal edilsin mi?")
+                        .setPositiveButton("İptal Et") { _, _ -> onCancelDownload?.invoke(dlId!!) }
+                        .setNegativeButton("Devam Et", null)
+                        .show()
+                } else {
+                    onDownloadClick(track, position)
+                }
+            }
+            // Uzun basış hala iptal eder (ek güvenlik)
+            btnDownload.setOnLongClickListener {
+                val dlId = downloadIdForPosition(position)
+                if (dlId != null && progressMap[position] != null && progressMap[position] != -1) {
+                    onCancelDownload?.invoke(dlId)
+                    true
+                } else false
+            }
+        }
+        bindPlayingState(holder.binding, position, track)
+        bindDownloadState(holder.binding, position)
+    }
+
+    private fun bindPlayingState(binding: ItemTrackBinding, position: Int, track: Track) {
+        val isPlaying = position == playingPosition
+        binding.apply {
             if (isPlaying) {
                 ivAlbumArt.load(track.image) {
                     transformations(RoundedCornersTransformation(10f))
                     placeholder(android.R.drawable.ic_media_play)
                 }
-                // Oynatma göstergesi - albumart üzerine play ikonu
                 ivAlbumArt.setColorFilter(
                     android.graphics.Color.parseColor("#996C63FF"),
                     android.graphics.PorterDuff.Mode.SRC_ATOP
                 )
-                // Kart arka planı accent renk
                 root.setCardBackgroundColor(android.graphics.Color.parseColor("#1E1A33"))
-                // Sol kenarda accent çizgisi
                 root.strokeColor = android.graphics.Color.parseColor("#6C63FF")
                 root.strokeWidth = 3
-                // Şarkı adı accent renk
                 tvTrackName.setTextColor(android.graphics.Color.parseColor("#9D97FF"))
-                // Pulse animasyonu
                 val pulse = ObjectAnimator.ofFloat(ivAlbumArt, "alpha", 1f, 0.6f).apply {
                     duration = 800
                     repeatCount = ObjectAnimator.INFINITE
@@ -80,8 +127,12 @@ class TrackAdapter(
                 root.strokeWidth = 0
                 tvTrackName.setTextColor(android.graphics.Color.WHITE)
             }
+        }
+    }
 
-            // Download durumu
+    private fun bindDownloadState(binding: ItemTrackBinding, position: Int) {
+        val progress = progressMap[position]
+        binding.apply {
             when {
                 progress == null -> {
                     downloadProgress.visibility = View.GONE
@@ -132,10 +183,6 @@ class TrackAdapter(
                     btnDownload.isEnabled = false
                 }
             }
-
-            root.setOnClickListener { onTrackClick(track) }
-            root.setOnLongClickListener { onLongClick?.invoke(track); true }
-            btnDownload.setOnClickListener { onDownloadClick(track, position) }
         }
     }
 
@@ -144,32 +191,43 @@ class TrackAdapter(
     fun setPlayingPosition(position: Int) {
         val old = playingPosition
         playingPosition = position
-        if (old >= 0) notifyItemChanged(old)
-        if (position >= 0) notifyItemChanged(position)
+        if (old >= 0) notifyItemChanged(old, PAYLOAD_PLAYING)
+        if (position >= 0) notifyItemChanged(position, PAYLOAD_PLAYING)
     }
 
     fun registerPreparing(position: Int) {
         progressMap[position] = -2
-        notifyItemChanged(position)
+        notifyItemChanged(position, PAYLOAD_PROGRESS)
     }
 
     fun registerDownload(downloadId: Long, position: Int) {
         downloadMap[downloadId] = position
         progressMap[position] = 0
-        notifyItemChanged(position)
+        notifyItemChanged(position, PAYLOAD_PROGRESS)
     }
 
     fun updateProgress(downloadId: Long, percent: Int) {
         val position = downloadMap[downloadId] ?: return
         progressMap[position] = percent
-        notifyItemChanged(position)
+        notifyItemChanged(position, PAYLOAD_PROGRESS)
     }
 
     fun markCompleted(downloadId: Long) {
         val position = downloadMap[downloadId] ?: return
         progressMap[position] = -1
         downloadMap.remove(downloadId)
-        notifyItemChanged(position)
+        notifyItemChanged(position, PAYLOAD_PROGRESS)
+    }
+
+    /** İptal için fakeId → position */
+    fun positionForFakeId(fakeId: Long): Int? = downloadMap[fakeId]
+
+    /** İndirme hata aldı — butonu sıfırla, tekrar tıklanabilir yap */
+    fun cancelDownload(position: Int) {
+        progressMap.remove(position)
+        // downloadMap'ten de temizle
+        downloadMap.entries.removeIf { it.value == position }
+        notifyItemChanged(position, PAYLOAD_PROGRESS)
     }
 
     private fun formatDuration(seconds: Int): String {

@@ -3,16 +3,14 @@ package com.example.musicplayer.ui
 import android.app.AlertDialog
 import android.view.LayoutInflater
 import android.view.ViewGroup
-import android.widget.Toast
 import androidx.recyclerview.widget.RecyclerView
 import com.example.musicplayer.databinding.ItemDownloadedTrackBinding
-import java.io.File
 
 class DownloadedTrackAdapter(
-    private val files: MutableList<File>,
-    private val onPlayClick: (File) -> Unit,
-    private val onDeleteClick: (File, Int) -> Unit,
-    private val onAddToPlaylist: (File) -> Unit
+    private val files: MutableList<LocalFile>,
+    private val onPlayClick: (LocalFile) -> Unit,
+    private val onDeleteClick: (LocalFile, Int) -> Unit,
+    private val onAddToPlaylist: (LocalFile) -> Unit
 ) : RecyclerView.Adapter<DownloadedTrackAdapter.ViewHolder>() {
 
     class ViewHolder(val binding: ItemDownloadedTrackBinding) : RecyclerView.ViewHolder(binding.root)
@@ -25,19 +23,21 @@ class DownloadedTrackAdapter(
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         val file = files[position]
         holder.binding.apply {
-            tvFileName.text = file.nameWithoutExtension
-            tvFileSize.text = formatSize(file.length())
+            // Format ikonu + isim
+            val typeIcon = if (file.isVideo) "🎬" else "🎵"
+            tvFileName.text = "$typeIcon ${file.name}"
+            tvFileSize.text = formatSize(file.size)
+
             root.setOnClickListener { onPlayClick(file) }
             btnPlay.setOnClickListener { onPlayClick(file) }
             btnDelete.setOnClickListener {
                 AlertDialog.Builder(holder.itemView.context)
                     .setTitle("Sil")
-                    .setMessage("\"${file.nameWithoutExtension}\" silinsin mi?")
+                    .setMessage("\"${file.name}\" silinsin mi?")
                     .setPositiveButton("Sil") { _, _ -> onDeleteClick(file, holder.adapterPosition) }
                     .setNegativeButton("İptal", null)
                     .show()
             }
-            // Uzun bas → playlist'e ekle
             root.setOnLongClickListener {
                 onAddToPlaylist(file)
                 true
@@ -52,11 +52,9 @@ class DownloadedTrackAdapter(
         notifyItemRemoved(position)
     }
 
-    private fun formatSize(bytes: Long): String {
-        return when {
-            bytes >= 1_000_000 -> "%.1f MB".format(bytes / 1_000_000.0)
-            bytes >= 1_000 -> "%.0f KB".format(bytes / 1_000.0)
-            else -> "$bytes B"
-        }
+    private fun formatSize(bytes: Long): String = when {
+        bytes >= 1_000_000 -> "%.1f MB".format(bytes / 1_000_000.0)
+        bytes >= 1_000     -> "%.0f KB".format(bytes / 1_000.0)
+        else               -> "$bytes B"
     }
 }
