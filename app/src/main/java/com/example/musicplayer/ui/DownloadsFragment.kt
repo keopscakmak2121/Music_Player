@@ -35,7 +35,6 @@ class DownloadsFragment : Fragment() {
         loadDownloadedFiles()
     }
 
-    // Sekmeler arası geçiş yapıldığında tetiklenir
     override fun onHiddenChanged(hidden: Boolean) {
         super.onHiddenChanged(hidden)
         if (!hidden) {
@@ -49,7 +48,6 @@ class DownloadsFragment : Fragment() {
     }
 
     fun loadDownloadedFiles() {
-        // UI thread'de güvenli çalışma için check
         if (!isAdded || _binding == null) return
 
         val musicDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC)
@@ -66,13 +64,25 @@ class DownloadsFragment : Fragment() {
                 onFileSelected?.invoke(track, file.absolutePath)
             },
             onDeleteClick = { file, position ->
-                if (file.delete()) {
-                    (binding.rvDownloads.adapter as? DownloadedTrackAdapter)?.removeAt(position)
-                    Toast.makeText(requireContext(), "Silindi", Toast.LENGTH_SHORT).show()
-                    if ((binding.rvDownloads.adapter?.itemCount ?: 0) == 0) updateEmptyState(true)
-                } else {
-                    Toast.makeText(requireContext(), "Silinemedi", Toast.LENGTH_SHORT).show()
-                }
+                AlertDialog.Builder(requireContext())
+                    .setTitle("Dosyayı Sil")
+                    .setMessage("\"${file.name}\" dosyası ve tüm listelerden kalıcı olarak silinecek. Onaylıyor musunuz?")
+                    .setPositiveButton("Sil") { _, _ ->
+                        val filePath = file.absolutePath
+                        if (file.delete()) {
+                            // Veritabanından da sil
+                            lifecycleScope.launch {
+                                val db = AppDatabase.getInstance(requireContext())
+                                db.playlistSongDao().deleteSongByVideoId(filePath)
+                                loadDownloadedFiles()
+                                Toast.makeText(requireContext(), "Dosya ve listelerden silindi", Toast.LENGTH_SHORT).show()
+                            }
+                        } else {
+                            Toast.makeText(requireContext(), "Dosya silinemedi", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                    .setNegativeButton("İptal", null)
+                    .show()
             },
             onAddToPlaylist = { file -> showAddToPlaylistDialog(file) }
         )

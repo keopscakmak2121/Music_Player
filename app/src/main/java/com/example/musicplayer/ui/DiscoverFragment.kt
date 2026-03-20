@@ -9,6 +9,7 @@ import android.os.Bundle
 import android.os.Environment
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -30,6 +31,7 @@ import com.example.musicplayer.db.PlaylistSongEntity
 import com.example.musicplayer.model.Track
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
+import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
@@ -47,7 +49,7 @@ class DiscoverFragment : Fragment() {
     private var currentTracks: MutableList<Track> = mutableListOf()
 
     private val handler = Handler(Looper.getMainLooper())
-    private val activeDownloads = mutableSetOf<Long>()
+    private val activeDownloads = mutableMapOf<Long, Int>()
 
     private var currentQuery = ""
     private var currentPage = 1
@@ -55,6 +57,7 @@ class DiscoverFragment : Fragment() {
     private var hasMore = false
 
     companion object {
+        private const val TAG = "MelodifySearch"
         const val BASE_URL = "http://77.92.154.224:5050/"
     }
 
@@ -78,15 +81,18 @@ class DiscoverFragment : Fragment() {
         binding.btnPlayAll.setOnClickListener {
             if (currentTracks.isEmpty()) return@setOnClickListener
             PlayerManager.urlResolver = { track, cb -> resolveAndPlay(track, cb) }
-            PlayerManager.playQueue(currentTracks, 0)
+            PlayerManager.playQueue(currentTracks.toList(), 0)
         }
 
         binding.rvTracks.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
+                if (dy <= 0) return // Sadece aşağı kaydırmada tetikle
+                
                 val layoutManager = recyclerView.layoutManager as LinearLayoutManager
                 val lastVisible = layoutManager.findLastVisibleItemPosition()
                 val total = layoutManager.itemCount
-                if (!isLoadingMore && hasMore && lastVisible >= total - 3) {
+                
+                if (!isLoadingMore && hasMore && lastVisible >= total - 4 && total > 0) {
                     loadMore()
                 }
             }
@@ -95,10 +101,9 @@ class DiscoverFragment : Fragment() {
         updatePlayModeUI()
     }
 
+    // MainActivity'den çağrılan metot
     fun updatePlayingPosition(index: Int) {
-        if (isAdded) {
-            trackAdapter?.setPlayingPosition(index)
-        }
+        trackAdapter?.setPlayingPosition(index)
     }
 
     private fun setPlayMode(mode: PlayMode) {
@@ -121,9 +126,10 @@ class DiscoverFragment : Fragment() {
     }
 
     private fun setupRetrofit() {
+        val logging = HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.HEADERS }
         val client = OkHttpClient.Builder()
+            .addInterceptor(logging)
             .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(120, TimeUnit.SECONDS)
             .build()
         youtubeApi = Retrofit.Builder()
             .baseUrl(BASE_URL)
@@ -147,6 +153,7 @@ class DiscoverFragment : Fragment() {
     private fun loadMore() {
         if (isLoadingMore || !hasMore) return
         isLoadingMore = true
+        Log.d(TAG, "Requesting page: ${currentPage + 1}")
         fetchPage(currentPage + 1, reset = false)
     }
 
@@ -156,6 +163,7 @@ class DiscoverFragment : Fragment() {
 
         youtubeApi.search(currentQuery, searchCount, page).enqueue(object : Callback<SearchResponse> {
             override fun onResponse(call: Call<SearchResponse>, response: Response<SearchResponse>) {
+                if (!isAdded) return
                 binding.btnSearch.isEnabled = true
                 binding.progressBar.visibility = View.GONE
                 isLoadingMore = false
@@ -164,6 +172,7 @@ class DiscoverFragment : Fragment() {
                     val body = response.body() ?: return
                     currentPage = body.page
                     hasMore = body.hasMore
+                    Log.d(TAG, "Loaded page: $currentPage, hasMore: $hasMore, tracks: ${body.tracks.size}")
 
                     val newTracks = body.tracks.map {
                         Track(it.videoId, it.title, it.author, it.thumbnails, "", it.duration)
@@ -176,126 +185,85 @@ class DiscoverFragment : Fragment() {
                             onTrackClick = { track ->
                                 val index = currentTracks.indexOf(track)
                                 PlayerManager.urlResolver = { t, cb -> resolveAndPlay(t, cb) }
-                                PlayerManager.playQueue(currentTracks, index)
+                                PlayerManager.playQueue(currentTracks.toList(), index)
                             },
-                            onDownloadClick = { track, position -> downloadAsMp3(track, position) },
+                            onDownloadClick = { track, pos -> showDownloadOptions(track, pos) },
                             onLongClick = { track -> showAddToPlaylistDialog(track) }
                         )
                         binding.rvTracks.adapter = trackAdapter
                         binding.playModeBar.visibility = View.VISIBLE
-                    } else {
+                    } else if (newTracks.isNotEmpty()) {
                         val startPos = currentTracks.size
                         currentTracks.addAll(newTracks)
                         trackAdapter?.notifyItemRangeInserted(startPos, newTracks.size)
+                    } else {
+                        hasMore = false
                     }
-                } else {
-                    Toast.makeText(requireContext(), "Hata: ${response.code()}", Toast.LENGTH_SHORT).show()
                 }
             }
 
             override fun onFailure(call: Call<SearchResponse>, t: Throwable) {
+                if (!isAdded) return
                 binding.btnSearch.isEnabled = true
                 binding.progressBar.visibility = View.GONE
                 isLoadingMore = false
-                Toast.makeText(requireContext(), "Bağlantı Hatası: ${t.message}", Toast.LENGTH_LONG).show()
+                Log.e(TAG, "Search failure: ${t.message}")
             }
         })
     }
 
-    private fun resolveAndPlay(track: Track, callback: ((String) -> Unit)? = null) {
-        youtubeApi.getVideoInfo(track.id).enqueue(object : Callback<InvidiousVideoInfo> {
-            override fun onResponse(call: Call<InvidiousVideoInfo>, response: Response<InvidiousVideoInfo>) {
-                val url = response.body()?.url
-                if (url.isNullOrEmpty()) {
-                    Toast.makeText(requireContext(), "Stream alınamadı", Toast.LENGTH_SHORT).show()
-                    return
-                }
-                callback?.invoke(url)
-            }
-            override fun onFailure(call: Call<InvidiousVideoInfo>, t: Throwable) {
-                Toast.makeText(requireContext(), "Hata: ${t.message}", Toast.LENGTH_SHORT).show()
-            }
-        })
-    }
-
-    private fun showAddToPlaylistDialog(track: Track) {
-        val db = AppDatabase.getInstance(requireContext())
-        lifecycleScope.launch {
-            db.playlistDao().getAllPlaylists().collect { playlists ->
-                if (playlists.isEmpty()) {
-                    Toast.makeText(requireContext(), "Önce playlist oluştur", Toast.LENGTH_SHORT).show()
-                    return@collect
-                }
-                val names = playlists.map { it.name }.toTypedArray()
-                AlertDialog.Builder(requireContext())
-                    .setTitle("Playlist'e Ekle")
-                    .setItems(names) { _, index ->
-                        val playlist = playlists[index]
-                        lifecycleScope.launch {
-                            val already = db.playlistSongDao().isSongInPlaylist(playlist.id, track.id)
-                            if (already > 0) {
-                                Toast.makeText(requireContext(), "Zaten listede", Toast.LENGTH_SHORT).show()
-                                return@launch
-                            }
-                            db.playlistSongDao().insertSong(
-                                PlaylistSongEntity(
-                                    playlistId = playlist.id,
-                                    videoId = track.id,
-                                    title = track.name,
-                                    author = track.artistName,
-                                    thumbnail = track.image,
-                                    duration = track.duration
-                                )
-                            )
-                            Toast.makeText(requireContext(), "\"${playlist.name}\" listesine eklendi", Toast.LENGTH_SHORT).show()
-                        }
-                    }
-                    .show()
-            }
-        }
-    }
-
-    private fun downloadAsMp3(track: Track, position: Int) {
-        val fileName = "${track.name.take(60).replace(Regex("[/\\\\:*?\"<>|]"), "_")}.mp3"
-        val musicDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC)
-        val existingFile = File(musicDir, fileName)
-        if (existingFile.exists()) {
-            AlertDialog.Builder(requireContext())
-                .setTitle("Zaten İndirilmiş")
-                .setMessage("\"${track.name}\" zaten müzik klasöründe mevcut. Tekrar indirilsin mi?")
-                .setPositiveButton("Evet") { _, _ -> startDownload(track, position, fileName) }
-                .setNegativeButton("Hayır", null)
-                .show()
+    private fun showDownloadOptions(track: Track, position: Int) {
+        val prefs = requireContext().getSharedPreferences("melodify_prefs", Context.MODE_PRIVATE)
+        val limit = prefs.getInt("download_limit", 3)
+        if (activeDownloads.size >= limit) {
+            Toast.makeText(requireContext(), "Lütfen bekleyen indirmelerin bitmesini bekleyin.", Toast.LENGTH_LONG).show()
             return
         }
-        startDownload(track, position, fileName)
+        val options = arrayOf("MP3 (Ses)", "MP4 (Video - 720p)", "MP4 (Video - 360p)")
+        AlertDialog.Builder(requireContext())
+            .setTitle("Format Seçin")
+            .setItems(options) { _, which ->
+                when (which) {
+                    0 -> downloadFile(track, position, "mp3")
+                    1 -> downloadFile(track, position, "mp4", "720")
+                    2 -> downloadFile(track, position, "mp4", "360")
+                }
+            }
+            .show()
     }
 
-    private fun startDownload(track: Track, position: Int, fileName: String) {
+    private fun downloadFile(track: Track, position: Int, format: String, quality: String? = null) {
+        val extension = if (format == "mp3") "mp3" else "mp4"
+        val fileName = "${track.name.take(50).replace(Regex("[/\\\\:*?\"<>|]"), "_")}.$extension"
+        val dir = if (format == "mp3") Environment.DIRECTORY_MUSIC else Environment.DIRECTORY_MOVIES
+        startDownload(track, position, fileName, format, quality, dir)
+    }
+
+    private fun startDownload(track: Track, position: Int, fileName: String, format: String, quality: String?, dirType: String) {
         trackAdapter?.registerPreparing(position)
-        val downloadUrl = "${BASE_URL}download/${track.id}"
+        var downloadUrl = "${BASE_URL}download/${track.id}?format=$format"
+        if (quality != null) downloadUrl += "&quality=$quality"
+
         try {
             val request = DownloadManager.Request(Uri.parse(downloadUrl))
                 .setTitle(track.name)
-                .setDescription("MP3 dönüştürülüyor…")
                 .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                .setDestinationInExternalPublicDir(Environment.DIRECTORY_MUSIC, fileName)
-                .setAllowedOverMetered(true)
-                .setAllowedOverRoaming(true)
-                .setMimeType("audio/mpeg")
+                .setDestinationInExternalPublicDir(dirType, fileName)
+            
             val dm = requireContext().getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
             val downloadId = dm.enqueue(request)
-            activeDownloads.add(downloadId)
-            startProgressPolling(dm, downloadId, position, fileName)
+            activeDownloads[downloadId] = position
+            trackAdapter?.registerDownload(downloadId, position)
+            startProgressPolling(dm, downloadId, position, fileName, dirType)
         } catch (e: Exception) {
-            Toast.makeText(requireContext(), "İndirme hatası: ${e.message}", Toast.LENGTH_SHORT).show()
+            Toast.makeText(requireContext(), "Hata: ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
 
-    private fun startProgressPolling(dm: DownloadManager, downloadId: Long, position: Int, fileName: String) {
+    private fun startProgressPolling(dm: DownloadManager, downloadId: Long, position: Int, fileName: String, dirType: String) {
         val poll = object : Runnable {
             override fun run() {
-                if (!activeDownloads.contains(downloadId)) return
+                if (!activeDownloads.containsKey(downloadId)) return
                 val cursor = dm.query(DownloadManager.Query().setFilterById(downloadId))
                 if (cursor != null && cursor.moveToFirst()) {
                     val status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
@@ -304,32 +272,17 @@ class DiscoverFragment : Fragment() {
                     when (status) {
                         DownloadManager.STATUS_PENDING, DownloadManager.STATUS_PAUSED -> handler.postDelayed(this, 1000)
                         DownloadManager.STATUS_RUNNING -> {
-                            if (total > 0) {
-                                val percent = ((down * 100) / total).toInt()
-                                trackAdapter?.registerDownload(downloadId, position)
-                                trackAdapter?.updateProgress(downloadId, percent)
-                            }
-                            handler.postDelayed(this, 500)
+                            if (total > 0) trackAdapter?.updateProgress(downloadId, ((down * 100) / total).toInt())
+                            handler.postDelayed(this, 800)
                         }
                         DownloadManager.STATUS_SUCCESSFUL -> {
                             activeDownloads.remove(downloadId)
-                            trackAdapter?.registerDownload(downloadId, position)
                             trackAdapter?.markCompleted(downloadId)
-                            
-                            val musicDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC)
-                            val file = File(musicDir, fileName)
-                            if (file.exists()) {
-                                MediaScannerConnection.scanFile(
-                                    requireContext(),
-                                    arrayOf(file.absolutePath),
-                                    arrayOf("audio/mpeg"),
-                                    null
-                                )
-                            }
+                            MediaScannerConnection.scanFile(requireContext(), arrayOf(File(Environment.getExternalStoragePublicDirectory(dirType), fileName).absolutePath), null, null)
                         }
                         DownloadManager.STATUS_FAILED -> {
                             activeDownloads.remove(downloadId)
-                            Toast.makeText(requireContext(), "İndirme başarısız", Toast.LENGTH_SHORT).show()
+                            trackAdapter?.updateProgress(downloadId, 0)
                         }
                     }
                 }
@@ -337,6 +290,32 @@ class DiscoverFragment : Fragment() {
             }
         }
         handler.post(poll)
+    }
+
+    private fun resolveAndPlay(track: Track, callback: ((String) -> Unit)? = null) {
+        youtubeApi.getVideoInfo(track.id).enqueue(object : Callback<InvidiousVideoInfo> {
+            override fun onResponse(call: Call<InvidiousVideoInfo>, response: Response<InvidiousVideoInfo>) {
+                val url = response.body()?.url ?: return
+                callback?.invoke(url)
+            }
+            override fun onFailure(call: Call<InvidiousVideoInfo>, t: Throwable) {}
+        })
+    }
+
+    private fun showAddToPlaylistDialog(track: Track) {
+        lifecycleScope.launch {
+            AppDatabase.getInstance(requireContext()).playlistDao().getAllPlaylists().collect { playlists ->
+                if (playlists.isEmpty()) return@collect
+                val names = playlists.map { it.name }.toTypedArray()
+                AlertDialog.Builder(requireContext()).setItems(names) { _, i ->
+                    lifecycleScope.launch {
+                        AppDatabase.getInstance(requireContext()).playlistSongDao().insertSong(
+                            PlaylistSongEntity(playlistId = playlists[i].id, videoId = track.id, title = track.name, author = track.artistName, thumbnail = track.image, duration = track.duration)
+                        )
+                    }
+                }.show()
+            }
+        }
     }
 
     override fun onDestroyView() {

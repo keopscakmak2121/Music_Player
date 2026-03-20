@@ -17,7 +17,7 @@ data class PlaylistEntity(
 data class PlaylistSongEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val playlistId: Long,
-    val videoId: String,
+    val videoId: String, // Bu alan hem YouTube ID hem de Yerel Dosya Yolu tutuyor
     val title: String,
     val author: String,
     val thumbnail: String,
@@ -52,6 +52,9 @@ interface PlaylistSongDao {
 
     @Delete
     suspend fun deleteSong(song: PlaylistSongEntity)
+
+    @Query("DELETE FROM playlist_songs WHERE videoId = :videoId")
+    suspend fun deleteSongByVideoId(videoId: String)
 
     @Query("SELECT COUNT(*) FROM playlist_songs WHERE playlistId = :playlistId AND videoId = :videoId")
     suspend fun isSongInPlaylist(playlistId: Long, videoId: String): Int

@@ -23,41 +23,40 @@ class SettingsFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
         val prefs = requireContext().getSharedPreferences("melodify_prefs", Context.MODE_PRIVATE)
 
-        // Ses kalitesi
-        val quality = prefs.getString("quality", "best")
-        when (quality) {
-            "best" -> binding.rbBest.isChecked = true
-            "medium" -> binding.rbMedium.isChecked = true
-            "low" -> binding.rbLow.isChecked = true
+        // İndirme Limiti
+        val downloadLimit = prefs.getInt("download_limit", 3)
+        when (downloadLimit) {
+            1 -> binding.rbLimit1.isChecked = true
+            3 -> binding.rbLimit3.isChecked = true
+            5 -> binding.rbLimit5.isChecked = true
         }
-        binding.rgQuality.setOnCheckedChangeListener { _, checkedId ->
-            val selectedQuality = when (checkedId) {
-                binding.rbBest.id -> "best"
-                binding.rbMedium.id -> "medium"
-                else -> "low"
+        binding.rgDownloadLimit.setOnCheckedChangeListener { _, checkedId ->
+            val limit = when (checkedId) {
+                binding.rbLimit1.id -> 1
+                binding.rbLimit3.id -> 3
+                binding.rbLimit5.id -> 5
+                else -> 3
             }
-            prefs.edit().putString("quality", selectedQuality).apply()
-            Toast.makeText(requireContext(), "Kalite ayarı kaydedildi", Toast.LENGTH_SHORT).show()
+            prefs.edit().putInt("download_limit", limit).apply()
+            Toast.makeText(requireContext(), "İndirme limiti $limit olarak ayarlandı", Toast.LENGTH_SHORT).show()
         }
 
         // Arama sonucu sayısı
         val searchCount = prefs.getInt("search_count", 20)
         when (searchCount) {
-            10 -> binding.rbCount10.isChecked = true
             20 -> binding.rbCount20.isChecked = true
-            30 -> binding.rbCount30.isChecked = true
             50 -> binding.rbCount50.isChecked = true
+            100 -> binding.rbCount100.isChecked = true
         }
         binding.rgSearchCount.setOnCheckedChangeListener { _, checkedId ->
             val count = when (checkedId) {
-                binding.rbCount10.id -> 10
                 binding.rbCount20.id -> 20
-                binding.rbCount30.id -> 30
                 binding.rbCount50.id -> 50
+                binding.rbCount100.id -> 100
                 else -> 20
             }
             prefs.edit().putInt("search_count", count).apply()
-            Toast.makeText(requireContext(), "$count sonuç ayarlandı", Toast.LENGTH_SHORT).show()
+            Toast.makeText(requireContext(), "Sayfa başına $count sonuç ayarlandı", Toast.LENGTH_SHORT).show()
         }
     }
 

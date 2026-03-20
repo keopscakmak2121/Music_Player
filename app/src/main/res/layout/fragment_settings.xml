@@ -39,14 +39,14 @@
                 android:layout_marginTop="2dp" />
         </LinearLayout>
 
-        <!-- Audio Quality -->
+        <!-- İndirme Limiti -->
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginStart="20dp"
             android:layout_marginTop="8dp"
             android:layout_marginBottom="8dp"
-            android:text="SES KALİTESİ"
+            android:text="AYNI ANDA İNDİRME LİMİTİ"
             android:textColor="@color/text_hint"
             android:textSize="11sp"
             android:letterSpacing="0.1" />
@@ -67,36 +67,36 @@
                 android:padding="4dp">
 
                 <RadioGroup
-                    android:id="@+id/rgQuality"
+                    android:id="@+id/rgDownloadLimit"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content">
 
                     <RadioButton
-                        android:id="@+id/rbBest"
+                        android:id="@+id/rbLimit1"
+                        android:layout_width="match_parent"
+                        android:layout_height="48dp"
+                        android:buttonTint="@color/accent"
+                        android:paddingStart="16dp"
+                        android:text="1 indirme (Önerilen)"
+                        android:textColor="@color/text_primary" />
+
+                    <RadioButton
+                        android:id="@+id/rbLimit3"
                         android:layout_width="match_parent"
                         android:layout_height="48dp"
                         android:buttonTint="@color/accent"
                         android:checked="true"
                         android:paddingStart="16dp"
-                        android:text="En İyi Kalite"
+                        android:text="3 indirme"
                         android:textColor="@color/text_primary" />
 
                     <RadioButton
-                        android:id="@+id/rbMedium"
+                        android:id="@+id/rbLimit5"
                         android:layout_width="match_parent"
                         android:layout_height="48dp"
                         android:buttonTint="@color/accent"
                         android:paddingStart="16dp"
-                        android:text="Orta Kalite"
-                        android:textColor="@color/text_primary" />
-
-                    <RadioButton
-                        android:id="@+id/rbLow"
-                        android:layout_width="match_parent"
-                        android:layout_height="48dp"
-                        android:buttonTint="@color/accent"
-                        android:paddingStart="16dp"
-                        android:text="Düşük Kalite (Az Veri)"
+                        android:text="5 indirme"
                         android:textColor="@color/text_primary" />
 
                 </RadioGroup>
@@ -136,15 +136,6 @@
                     android:layout_height="wrap_content">
 
                     <RadioButton
-                        android:id="@+id/rbCount10"
-                        android:layout_width="match_parent"
-                        android:layout_height="48dp"
-                        android:buttonTint="@color/accent"
-                        android:paddingStart="16dp"
-                        android:text="10 sonuç"
-                        android:textColor="@color/text_primary" />
-
-                    <RadioButton
                         android:id="@+id/rbCount20"
                         android:layout_width="match_parent"
                         android:layout_height="48dp"
@@ -155,70 +146,24 @@
                         android:textColor="@color/text_primary" />
 
                     <RadioButton
-                        android:id="@+id/rbCount30"
-                        android:layout_width="match_parent"
-                        android:layout_height="48dp"
-                        android:buttonTint="@color/accent"
-                        android:paddingStart="16dp"
-                        android:text="30 sonuç"
-                        android:textColor="@color/text_primary" />
-
-                    <RadioButton
                         android:id="@+id/rbCount50"
                         android:layout_width="match_parent"
                         android:layout_height="48dp"
                         android:buttonTint="@color/accent"
                         android:paddingStart="16dp"
-                        android:text="50 sonuç (yavaş)"
+                        android:text="50 sonuç"
+                        android:textColor="@color/text_primary" />
+
+                    <RadioButton
+                        android:id="@+id/rbCount100"
+                        android:layout_width="match_parent"
+                        android:layout_height="48dp"
+                        android:buttonTint="@color/accent"
+                        android:paddingStart="16dp"
+                        android:text="100 sonuç (Yavaş)"
                         android:textColor="@color/text_primary" />
 
                 </RadioGroup>
-            </LinearLayout>
-        </androidx.cardview.widget.CardView>
-
-        <!-- İndirme Klasörü Bilgisi -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="20dp"
-            android:layout_marginTop="20dp"
-            android:layout_marginBottom="8dp"
-            android:text="İNDİRME"
-            android:textColor="@color/text_hint"
-            android:textSize="11sp"
-            android:letterSpacing="0.1" />
-
-        <androidx.cardview.widget.CardView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="16dp"
-            android:layout_marginEnd="16dp"
-            app:cardBackgroundColor="@color/bg_card"
-            app:cardCornerRadius="14dp"
-            app:cardElevation="0dp">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="16dp">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="İndirme Klasörü"
-                    android:textColor="@color/text_primary"
-                    android:textSize="15sp"
-                    android:textStyle="bold" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:text="Müzik / Music"
-                    android:textColor="@color/text_secondary"
-                    android:textSize="13sp" />
-
             </LinearLayout>
         </androidx.cardview.widget.CardView>
 
@@ -263,7 +208,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
-                    android:text="v2.0.0"
+                    android:text="v2.1.0"
                     android:textColor="@color/text_secondary"
                     android:textSize="13sp" />
 
