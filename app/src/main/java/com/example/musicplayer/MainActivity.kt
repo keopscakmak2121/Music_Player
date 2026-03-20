@@ -1,152 +1,151 @@
 package com.example.musicplayer
 
-import android.app.DownloadManager
 import android.content.ComponentName
-import android.content.Context
-import android.net.Uri
 import android.os.Bundle
-import android.os.Environment
-import android.util.Log
+import android.view.View
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import androidx.media3.common.MediaItem
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
-import androidx.recyclerview.widget.LinearLayoutManager
-import com.example.musicplayer.api.YouTubeApi
-import com.example.musicplayer.api.InvidiousSearchResult
-import com.example.musicplayer.api.InvidiousVideoInfo
+import coil.load
+import coil.transform.RoundedCornersTransformation
 import com.example.musicplayer.databinding.ActivityMainBinding
+import com.example.musicplayer.db.PlaylistEntity
 import com.example.musicplayer.model.Track
+import com.example.musicplayer.ui.DiscoverFragment
+import com.example.musicplayer.ui.DownloadsFragment
+import com.example.musicplayer.ui.PlaylistDetailFragment
+import com.example.musicplayer.ui.PlaylistsFragment
+import com.example.musicplayer.ui.SettingsFragment
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
-import okhttp3.OkHttpClient
-import retrofit2.Call
-import retrofit2.Callback
-import retrofit2.Response
-import retrofit2.Retrofit
-import retrofit2.converter.gson.GsonConverterFactory
-import java.util.concurrent.TimeUnit
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
-    private lateinit var youtubeApi: YouTubeApi
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private val controller: MediaController?
         get() = if (controllerFuture?.isDone == true) controllerFuture?.get() else null
+
+    private val discoverFragment = DiscoverFragment()
+    private val playlistsFragment = PlaylistsFragment()
+    private val downloadsFragment = DownloadsFragment()
+    private val settingsFragment = SettingsFragment()
+    private val playlistDetailFragment = PlaylistDetailFragment()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        setupRetrofit()
-        setupRecyclerView()
         setupMediaController()
+        setupFragments()
+        setupBottomNav()
+        setupMiniPlayer()
+        wireCallbacks()
+    }
 
-        binding.btnSearch.setOnClickListener {
-            val query = binding.etSearch.text.toString()
-            if (query.isNotEmpty()) {
-                searchTracks(query)
+    private fun setupFragments() {
+        supportFragmentManager.beginTransaction()
+            .add(R.id.fragmentContainer, discoverFragment, "discover")
+            .add(R.id.fragmentContainer, playlistsFragment, "playlists").hide(playlistsFragment)
+            .add(R.id.fragmentContainer, downloadsFragment, "downloads").hide(downloadsFragment)
+            .add(R.id.fragmentContainer, settingsFragment, "settings").hide(settingsFragment)
+            .add(R.id.fragmentContainer, playlistDetailFragment, "playlist_detail").hide(playlistDetailFragment)
+            .commit()
+    }
+
+    private fun setupBottomNav() {
+        binding.bottomNav.setOnItemSelectedListener { item ->
+            val show = when (item.itemId) {
+                R.id.nav_discover -> discoverFragment
+                R.id.nav_playlists -> playlistsFragment
+                R.id.nav_downloads -> downloadsFragment
+                R.id.nav_settings -> settingsFragment
+                else -> return@setOnItemSelectedListener false
             }
+            val all = listOf(discoverFragment, playlistsFragment, downloadsFragment, settingsFragment, playlistDetailFragment)
+            val tx = supportFragmentManager.beginTransaction()
+            all.forEach { if (it == show) tx.show(it) else tx.hide(it) }
+            tx.commit()
+            true
         }
-    }
-
-    private fun setupRetrofit() {
-        val okHttpClient = OkHttpClient.Builder()
-            .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(30, TimeUnit.SECONDS)
-            .build()
-
-        val retrofit = Retrofit.Builder()
-            .baseUrl("https://invidious.flokinet.to/") // Daha sağlam sunucu
-            .client(okHttpClient)
-            .addConverterFactory(GsonConverterFactory.create())
-            .build()
-        youtubeApi = retrofit.create(YouTubeApi::class.java)
-    }
-
-    private fun setupRecyclerView() {
-        binding.rvTracks.layoutManager = LinearLayoutManager(this)
     }
 
     private fun setupMediaController() {
         val sessionToken = SessionToken(this, ComponentName(this, PlaybackService::class.java))
         controllerFuture = MediaController.Builder(this, sessionToken).buildAsync()
         controllerFuture?.addListener({
-            binding.playerView.player = controller
+            controller?.let { PlayerManager.attach(it) }
+            PlayerManager.onTrackChanged = { track -> updateMiniPlayer(track) }
         }, MoreExecutors.directExecutor())
     }
 
-    private fun searchTracks(query: String) {
-        binding.btnSearch.isEnabled = false
-        youtubeApi.search(query).enqueue(object : Callback<List<InvidiousSearchResult>> {
-            override fun onResponse(call: Call<List<InvidiousSearchResult>>, response: Response<List<InvidiousSearchResult>>) {
-                binding.btnSearch.isEnabled = true
-                if (response.isSuccessful) {
-                    val results = response.body() ?: emptyList()
-                    val tracks = results.map { 
-                        Track(it.videoId, it.title, it.author, it.thumbnails.firstOrNull()?.url ?: "", "", it.duration)
-                    }
-                    binding.rvTracks.adapter = TrackAdapter(
-                        tracks,
-                        onTrackClick = { getStreamAndPlay(it) },
-                        onDownloadClick = { getStreamAndDownload(it) }
-                    )
-                } else {
-                    Toast.makeText(this@MainActivity, "Hata kodu: ${response.code()}", Toast.LENGTH_SHORT).show()
-                }
+    private fun setupMiniPlayer() {
+        binding.miniPlayerPlayPause.setOnClickListener {
+            val c = controller ?: return@setOnClickListener
+            if (c.isPlaying) {
+                c.pause()
+                binding.miniPlayerPlayPause.setImageResource(android.R.drawable.ic_media_play)
+            } else {
+                c.play()
+                binding.miniPlayerPlayPause.setImageResource(android.R.drawable.ic_media_pause)
             }
-
-            override fun onFailure(call: Call<List<InvidiousSearchResult>>, t: Throwable) {
-                binding.btnSearch.isEnabled = true
-                Toast.makeText(this@MainActivity, "Bağlantı Hatası: ${t.message}", Toast.LENGTH_SHORT).show()
-            }
-        })
+        }
     }
 
-    private fun getStreamAndPlay(track: Track) {
-        youtubeApi.getVideoInfo(track.id).enqueue(object : Callback<InvidiousVideoInfo> {
-            override fun onResponse(call: Call<InvidiousVideoInfo>, response: Response<InvidiousVideoInfo>) {
-                val streamUrl = response.body()?.adaptiveFormats?.firstOrNull { it.type.contains("audio") }?.url ?: return
-                playTrack(track, streamUrl)
+    private fun wireCallbacks() {
+        val playCallback: (Track, String) -> Unit = { track, url -> playTrack(track, url) }
+
+        discoverFragment.onTrackSelected = playCallback
+        downloadsFragment.onFileSelected = playCallback
+        playlistDetailFragment.onTrackSelected = playCallback
+
+        playlistsFragment.onPlaylistClick = { playlist -> openPlaylistDetail(playlist) }
+        playlistDetailFragment.onBack = {
+            supportFragmentManager.beginTransaction()
+                .hide(playlistDetailFragment).show(playlistsFragment).commit()
+            binding.bottomNav.selectedItemId = R.id.nav_playlists
+        }
+
+        // PlayerManager next/prev also needs URL resolver
+        PlayerManager.onTrackChanged = { track -> updateMiniPlayer(track) }
+    }
+
+    private fun openPlaylistDetail(playlist: PlaylistEntity) {
+        playlistDetailFragment.playlistId = playlist.id
+        playlistDetailFragment.playlistName = playlist.name
+        playlistDetailFragment.onTrackSelected = { track, url -> playTrack(track, url) }
+
+        val all = listOf(discoverFragment, playlistsFragment, downloadsFragment, settingsFragment)
+        val tx = supportFragmentManager.beginTransaction()
+        all.forEach { tx.hide(it) }
+        tx.show(playlistDetailFragment).commit()
+    }
+
+    fun playTrack(track: Track, url: String) {
+        val c = controller ?: run {
+            Toast.makeText(this, "Player hazırlanıyor", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val mediaItem = androidx.media3.common.MediaItem.Builder()
+            .setUri(url).setMediaId(track.id).build()
+        c.setMediaItem(mediaItem)
+        c.prepare()
+        c.play()
+        updateMiniPlayer(track)
+    }
+
+    private fun updateMiniPlayer(track: Track) {
+        binding.miniPlayer.visibility = View.VISIBLE
+        binding.miniPlayerTitle.text = track.name
+        binding.miniPlayerArtist.text = track.artistName
+        binding.miniPlayerPlayPause.setImageResource(android.R.drawable.ic_media_pause)
+        if (track.image.isNotEmpty()) {
+            binding.miniPlayerArt.load(track.image) {
+                transformations(RoundedCornersTransformation(8f))
             }
-            override fun onFailure(call: Call<InvidiousVideoInfo>, t: Throwable) {}
-        })
-    }
-
-    private fun getStreamAndDownload(track: Track) {
-        youtubeApi.getVideoInfo(track.id).enqueue(object : Callback<InvidiousVideoInfo> {
-            override fun onResponse(call: Call<InvidiousVideoInfo>, response: Response<InvidiousVideoInfo>) {
-                val streamUrl = response.body()?.adaptiveFormats?.firstOrNull { it.type.contains("audio") }?.url ?: return
-                downloadTrack(track, streamUrl)
-            }
-            override fun onFailure(call: Call<InvidiousVideoInfo>, t: Throwable) {}
-        })
-    }
-
-    private fun playTrack(track: Track, url: String) {
-        val controller = controller ?: return
-        val mediaItem = MediaItem.Builder()
-            .setUri(url)
-            .setMediaId(track.id)
-            .build()
-        controller.setMediaItem(mediaItem)
-        controller.prepare()
-        controller.play()
-        Toast.makeText(this, "Çalınıyor: ${track.name}", Toast.LENGTH_SHORT).show()
-    }
-
-    private fun downloadTrack(track: Track, url: String) {
-        val request = DownloadManager.Request(Uri.parse(url))
-            .setTitle(track.name)
-            .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-            .setDestinationInExternalPublicDir(Environment.DIRECTORY_MUSIC, "${track.name}.mp3")
-
-        val downloadManager = getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-        downloadManager.enqueue(request)
-        Toast.makeText(this, "İndirme başlatıldı", Toast.LENGTH_SHORT).show()
+        }
     }
 
     override fun onDestroy() {

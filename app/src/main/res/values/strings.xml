@@ -1,6 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Müzik İndir &amp; Dinle</string>
-    <string name="search_hint">Şarkı veya sanatçı ara...</string>
-    <string name="download">İndir</string>
-    <string name="play">Oynat</string>
+    <string name="app_name">Melodify</string>
+    <string name="search_hint">Şarkı, sanatçı ara…</string>
+    <string name="nav_discover">Keşfet</string>
+    <string name="nav_downloads">İndirilenler</string>
+    <string name="nav_settings">Ayarlar</string>
 </resources>

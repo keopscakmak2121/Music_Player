@@ -1,0 +1,87 @@
+package com.example.musicplayer
+
+import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
+import androidx.media3.session.MediaController
+import com.example.musicplayer.model.Track
+
+enum class PlayMode { SEQUENTIAL, SHUFFLE }
+
+object PlayerManager {
+
+    var playMode: PlayMode = PlayMode.SEQUENTIAL
+    var currentQueue: List<Track> = emptyList()
+    var currentIndex: Int = -1
+    private var shuffledIndices: List<Int> = emptyList()
+
+    private var controller: MediaController? = null
+
+    fun attach(controller: MediaController) {
+        this.controller = controller
+        controller.addListener(object : Player.Listener {
+            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                // handled externally
+            }
+            override fun onPlaybackStateChanged(state: Int) {
+                if (state == Player.STATE_ENDED) {
+                    playNext()
+                }
+            }
+        })
+    }
+
+    fun playQueue(tracks: List<Track>, startIndex: Int, urlResolver: (Track, (String) -> Unit) -> Unit) {
+        currentQueue = tracks
+        currentIndex = startIndex
+        if (playMode == PlayMode.SHUFFLE) {
+            shuffledIndices = (tracks.indices).toMutableList().shuffled()
+        }
+        val track = currentQueue[currentIndex]
+        urlResolver(track) { url -> play(track, url) }
+    }
+
+    fun playNext(urlResolver: ((Track, (String) -> Unit) -> Unit)? = null) {
+        if (currentQueue.isEmpty()) return
+        val nextIndex = when (playMode) {
+            PlayMode.SEQUENTIAL -> {
+                if (currentIndex + 1 < currentQueue.size) currentIndex + 1 else return
+            }
+            PlayMode.SHUFFLE -> {
+                val pos = shuffledIndices.indexOf(currentIndex)
+                val nextPos = (pos + 1) % shuffledIndices.size
+                shuffledIndices[nextPos]
+            }
+        }
+        currentIndex = nextIndex
+        val track = currentQueue[currentIndex]
+        urlResolver?.invoke(track) { url -> play(track, url) }
+    }
+
+    fun playPrev(urlResolver: ((Track, (String) -> Unit) -> Unit)? = null) {
+        if (currentQueue.isEmpty()) return
+        val prevIndex = when (playMode) {
+            PlayMode.SEQUENTIAL -> {
+                if (currentIndex - 1 >= 0) currentIndex - 1 else return
+            }
+            PlayMode.SHUFFLE -> {
+                val pos = shuffledIndices.indexOf(currentIndex)
+                val prevPos = if (pos - 1 >= 0) pos - 1 else shuffledIndices.size - 1
+                shuffledIndices[prevPos]
+            }
+        }
+        currentIndex = prevIndex
+        val track = currentQueue[currentIndex]
+        urlResolver?.invoke(track) { url -> play(track, url) }
+    }
+
+    private fun play(track: Track, url: String) {
+        val c = controller ?: return
+        val mediaItem = MediaItem.Builder().setUri(url).setMediaId(track.id).build()
+        c.setMediaItem(mediaItem)
+        c.prepare()
+        c.play()
+        onTrackChanged?.invoke(track)
+    }
+
+    var onTrackChanged: ((Track) -> Unit)? = null
+}

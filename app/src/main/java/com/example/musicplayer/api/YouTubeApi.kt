@@ -7,34 +7,33 @@ import retrofit2.http.Path
 import retrofit2.http.Query
 
 interface YouTubeApi {
-    @GET("api/v1/search")
+    @GET("search")
     fun search(
         @Query("q") query: String,
-        @Query("type") type: String = "video"
-    ): Call<List<InvidiousSearchResult>>
+        @Query("count") count: Int = 20,
+        @Query("page") page: Int = 1
+    ): Call<SearchResponse>
 
-    @GET("api/v1/videos/{videoId}")
+    @GET("stream/{videoId}")
     fun getVideoInfo(
         @Path("videoId") videoId: String
     ): Call<InvidiousVideoInfo>
 }
 
+data class SearchResponse(
+    @SerializedName("tracks") val tracks: List<InvidiousSearchResult>,
+    @SerializedName("page") val page: Int,
+    @SerializedName("has_more") val hasMore: Boolean
+)
+
 data class InvidiousSearchResult(
-    @SerializedName("videoId") val videoId: String,
+    @SerializedName("id") val videoId: String,
     @SerializedName("title") val title: String,
     @SerializedName("author") val author: String,
-    @SerializedName("videoThumbnails") val thumbnails: List<Thumbnail>,
-    @SerializedName("lengthSeconds") val duration: Int
+    @SerializedName("thumbnail") val thumbnails: String,
+    @SerializedName("duration") val duration: Int
 )
-
-data class Thumbnail(@SerializedName("url") val url: String)
 
 data class InvidiousVideoInfo(
-    @SerializedName("adaptiveFormats") val adaptiveFormats: List<AdaptiveFormat>
-)
-
-data class AdaptiveFormat(
-    @SerializedName("url") val url: String,
-    @SerializedName("type") val type: String,
-    @SerializedName("bitrate") val bitrate: String
+    @SerializedName("url") val url: String
 )
