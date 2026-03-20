@@ -32,11 +32,11 @@ class MainActivity : AppCompatActivity() {
     private val controller: MediaController?
         get() = if (controllerFuture?.isDone == true) controllerFuture?.get() else null
 
-    private val discoverFragment = DiscoverFragment()
-    private val playlistsFragment = PlaylistsFragment()
-    private val downloadsFragment = DownloadsFragment()
-    private val settingsFragment = SettingsFragment()
-    private val playlistDetailFragment = PlaylistDetailFragment()
+    private lateinit var discoverFragment: DiscoverFragment
+    private lateinit var playlistsFragment: PlaylistsFragment
+    private lateinit var downloadsFragment: DownloadsFragment
+    private lateinit var settingsFragment: SettingsFragment
+    private lateinit var playlistDetailFragment: PlaylistDetailFragment
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -52,8 +52,8 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         checkPermissions()
+        setupFragments(savedInstanceState)
         setupMediaController()
-        setupFragments()
         setupBottomNav()
         setupMiniPlayer()
         wireCallbacks()
@@ -69,14 +69,28 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun setupFragments() {
-        supportFragmentManager.beginTransaction()
-            .add(R.id.fragmentContainer, discoverFragment, "discover")
-            .add(R.id.fragmentContainer, playlistsFragment, "playlists").hide(playlistsFragment)
-            .add(R.id.fragmentContainer, downloadsFragment, "downloads").hide(downloadsFragment)
-            .add(R.id.fragmentContainer, settingsFragment, "settings").hide(settingsFragment)
-            .add(R.id.fragmentContainer, playlistDetailFragment, "playlist_detail").hide(playlistDetailFragment)
-            .commit()
+    private fun setupFragments(savedInstanceState: Bundle?) {
+        if (savedInstanceState == null) {
+            discoverFragment = DiscoverFragment()
+            playlistsFragment = PlaylistsFragment()
+            downloadsFragment = DownloadsFragment()
+            settingsFragment = SettingsFragment()
+            playlistDetailFragment = PlaylistDetailFragment()
+
+            supportFragmentManager.beginTransaction()
+                .add(R.id.fragmentContainer, discoverFragment, "discover")
+                .add(R.id.fragmentContainer, playlistsFragment, "playlists").hide(playlistsFragment)
+                .add(R.id.fragmentContainer, downloadsFragment, "downloads").hide(downloadsFragment)
+                .add(R.id.fragmentContainer, settingsFragment, "settings").hide(settingsFragment)
+                .add(R.id.fragmentContainer, playlistDetailFragment, "playlist_detail").hide(playlistDetailFragment)
+                .commit()
+        } else {
+            discoverFragment = supportFragmentManager.findFragmentByTag("discover") as DiscoverFragment
+            playlistsFragment = supportFragmentManager.findFragmentByTag("playlists") as PlaylistsFragment
+            downloadsFragment = supportFragmentManager.findFragmentByTag("downloads") as DownloadsFragment
+            settingsFragment = supportFragmentManager.findFragmentByTag("settings") as SettingsFragment
+            playlistDetailFragment = supportFragmentManager.findFragmentByTag("playlist_detail") as PlaylistDetailFragment
+        }
     }
 
     private fun setupBottomNav() {
@@ -102,13 +116,16 @@ class MainActivity : AppCompatActivity() {
         controllerFuture?.addListener({
             controller?.let { 
                 PlayerManager.attach(it)
-                // Set the URL resolver for PlayerManager to handle auto-next
                 PlayerManager.urlResolver = { track, callback ->
-                    // In this app, the track object already has the audio URL
                     callback(track.audio)
                 }
             }
-            PlayerManager.onTrackChanged = { track -> updateMiniPlayer(track) }
+            PlayerManager.onTrackChanged = { track, index -> 
+                updateMiniPlayer(track)
+                // Also update adapters in fragments if they are visible
+                discoverFragment.updatePlayingPosition(index)
+                playlistDetailFragment.updatePlayingPosition(index)
+            }
         }, MoreExecutors.directExecutor())
     }
 
@@ -122,10 +139,6 @@ class MainActivity : AppCompatActivity() {
                 c.play()
                 binding.miniPlayerPlayPause.setImageResource(android.R.drawable.ic_media_pause)
             }
-        }
-        
-        binding.miniPlayer.setOnClickListener {
-            // Expand player logic could go here
         }
     }
 
@@ -147,7 +160,6 @@ class MainActivity : AppCompatActivity() {
     private fun openPlaylistDetail(playlist: PlaylistEntity) {
         playlistDetailFragment.playlistId = playlist.id
         playlistDetailFragment.playlistName = playlist.name
-        playlistDetailFragment.onTrackSelected = { track, url -> playTrack(track, url) }
 
         val all = listOf(discoverFragment, playlistsFragment, downloadsFragment, settingsFragment)
         val tx = supportFragmentManager.beginTransaction()

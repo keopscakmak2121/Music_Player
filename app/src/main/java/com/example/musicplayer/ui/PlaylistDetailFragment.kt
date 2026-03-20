@@ -100,6 +100,12 @@ class PlaylistDetailFragment : Fragment() {
         loadPlaylistSongs()
     }
 
+    fun updatePlayingPosition(index: Int) {
+        if (isAdded) {
+            songAdapter.setPlayingPosition(index)
+        }
+    }
+
     fun loadPlaylistSongs() {
         if (playlistId == -1L) return
         
@@ -140,15 +146,13 @@ class PlaylistDetailFragment : Fragment() {
     private fun resolveAndPlay(track: Track, callback: ((String) -> Unit)? = null) {
         if (isLocalFile(track.id)) {
             val url = track.id
-            if (callback != null) callback(url)
-            else onTrackSelected?.invoke(track, url)
+            callback?.invoke(url)
             return
         }
         youtubeApi.getVideoInfo(track.id).enqueue(object : Callback<InvidiousVideoInfo> {
             override fun onResponse(call: Call<InvidiousVideoInfo>, response: Response<InvidiousVideoInfo>) {
                 val url = response.body()?.url ?: return
-                if (callback != null) callback(url)
-                else onTrackSelected?.invoke(track, url)
+                callback?.invoke(url)
             }
             override fun onFailure(call: Call<InvidiousVideoInfo>, t: Throwable) {
                 Toast.makeText(requireContext(), "Hata: ${t.message}", Toast.LENGTH_SHORT).show()

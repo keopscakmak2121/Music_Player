@@ -35,12 +35,23 @@ class DownloadsFragment : Fragment() {
         loadDownloadedFiles()
     }
 
+    // Sekmeler arası geçiş yapıldığında tetiklenir
+    override fun onHiddenChanged(hidden: Boolean) {
+        super.onHiddenChanged(hidden)
+        if (!hidden) {
+            loadDownloadedFiles()
+        }
+    }
+
     override fun onResume() {
         super.onResume()
         loadDownloadedFiles()
     }
 
-    private fun loadDownloadedFiles() {
+    fun loadDownloadedFiles() {
+        // UI thread'de güvenli çalışma için check
+        if (!isAdded || _binding == null) return
+
         val musicDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC)
         val files = musicDir?.listFiles { f ->
             f.extension == "mp3" || f.extension == "m4a" || f.extension == "webm"
@@ -81,7 +92,6 @@ class DownloadsFragment : Fragment() {
                     .setItems(names) { _, index ->
                         val playlist = playlists[index]
                         lifecycleScope.launch {
-                            // Kontrolü absolutePath ile yapıyoruz çünkü videoId olarak onu kaydediyoruz
                             val already = db.playlistSongDao().isSongInPlaylist(playlist.id, file.absolutePath)
                             if (already > 0) {
                                 Toast.makeText(requireContext(), "Zaten listede", Toast.LENGTH_SHORT).show()
@@ -90,7 +100,7 @@ class DownloadsFragment : Fragment() {
                             db.playlistSongDao().insertSong(
                                 PlaylistSongEntity(
                                     playlistId = playlist.id,
-                                    videoId = file.absolutePath, // yerel dosya yolu
+                                    videoId = file.absolutePath,
                                     title = file.nameWithoutExtension,
                                     author = "Yerel Dosya",
                                     thumbnail = "",

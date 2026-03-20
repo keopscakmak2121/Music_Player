@@ -81,7 +81,6 @@ class DiscoverFragment : Fragment() {
             PlayerManager.playQueue(currentTracks, 0)
         }
 
-        // Scroll ile daha fazla yükle
         binding.rvTracks.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
                 val layoutManager = recyclerView.layoutManager as LinearLayoutManager
@@ -94,6 +93,12 @@ class DiscoverFragment : Fragment() {
         })
 
         updatePlayModeUI()
+    }
+
+    fun updatePlayingPosition(index: Int) {
+        if (isAdded) {
+            trackAdapter?.setPlayingPosition(index)
+        }
     }
 
     private fun setPlayMode(mode: PlayMode) {
@@ -166,15 +171,12 @@ class DiscoverFragment : Fragment() {
 
                     if (reset) {
                         currentTracks = newTracks.toMutableList()
-                        PlayerManager.currentQueue = currentTracks
                         trackAdapter = TrackAdapter(
                             currentTracks,
                             onTrackClick = { track ->
                                 val index = currentTracks.indexOf(track)
-                                PlayerManager.currentIndex = index
-                                trackAdapter?.setPlayingPosition(index)
                                 PlayerManager.urlResolver = { t, cb -> resolveAndPlay(t, cb) }
-                                resolveAndPlay(track) { url -> onTrackSelected?.invoke(track, url) }
+                                PlayerManager.playQueue(currentTracks, index)
                             },
                             onDownloadClick = { track, position -> downloadAsMp3(track, position) },
                             onLongClick = { track -> showAddToPlaylistDialog(track) }
@@ -184,12 +186,7 @@ class DiscoverFragment : Fragment() {
                     } else {
                         val startPos = currentTracks.size
                         currentTracks.addAll(newTracks)
-                        PlayerManager.currentQueue = currentTracks
                         trackAdapter?.notifyItemRangeInserted(startPos, newTracks.size)
-                    }
-
-                    if (hasMore) {
-                        Toast.makeText(requireContext(), "Daha fazlası için aşağı kaydır", Toast.LENGTH_SHORT).show()
                     }
                 } else {
                     Toast.makeText(requireContext(), "Hata: ${response.code()}", Toast.LENGTH_SHORT).show()
@@ -206,7 +203,6 @@ class DiscoverFragment : Fragment() {
     }
 
     private fun resolveAndPlay(track: Track, callback: ((String) -> Unit)? = null) {
-        Toast.makeText(requireContext(), "Yükleniyor…", Toast.LENGTH_SHORT).show()
         youtubeApi.getVideoInfo(track.id).enqueue(object : Callback<InvidiousVideoInfo> {
             override fun onResponse(call: Call<InvidiousVideoInfo>, response: Response<InvidiousVideoInfo>) {
                 val url = response.body()?.url
@@ -214,8 +210,7 @@ class DiscoverFragment : Fragment() {
                     Toast.makeText(requireContext(), "Stream alınamadı", Toast.LENGTH_SHORT).show()
                     return
                 }
-                if (callback != null) callback(url)
-                else onTrackSelected?.invoke(track, url)
+                callback?.invoke(url)
             }
             override fun onFailure(call: Call<InvidiousVideoInfo>, t: Throwable) {
                 Toast.makeText(requireContext(), "Hata: ${t.message}", Toast.LENGTH_SHORT).show()
@@ -261,12 +256,11 @@ class DiscoverFragment : Fragment() {
     }
 
     private fun downloadAsMp3(track: Track, position: Int) {
-        // Zaten indirilmiş mi kontrol et
         val fileName = "${track.name.take(60).replace(Regex("[/\\\\:*?\"<>|]"), "_")}.mp3"
-        val musicDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_MUSIC)
-        val existingFile = java.io.File(musicDir, fileName)
+        val musicDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC)
+        val existingFile = File(musicDir, fileName)
         if (existingFile.exists()) {
-            android.app.AlertDialog.Builder(requireContext())
+            AlertDialog.Builder(requireContext())
                 .setTitle("Zaten İndirilmiş")
                 .setMessage("\"${track.name}\" zaten müzik klasöründe mevcut. Tekrar indirilsin mi?")
                 .setPositiveButton("Evet") { _, _ -> startDownload(track, position, fileName) }
@@ -322,7 +316,6 @@ class DiscoverFragment : Fragment() {
                             trackAdapter?.registerDownload(downloadId, position)
                             trackAdapter?.markCompleted(downloadId)
                             
-                            // Sistemi yeni dosyadan haberdar et
                             val musicDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC)
                             val file = File(musicDir, fileName)
                             if (file.exists()) {

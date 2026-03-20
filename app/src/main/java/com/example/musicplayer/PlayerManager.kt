@@ -10,6 +10,13 @@ enum class PlayMode { SEQUENTIAL, SHUFFLE }
 object PlayerManager {
 
     var playMode: PlayMode = PlayMode.SEQUENTIAL
+        set(value) {
+            field = value
+            if (value == PlayMode.SHUFFLE && currentQueue.isNotEmpty()) {
+                generateShuffledIndices()
+            }
+        }
+
     var currentQueue: List<Track> = emptyList()
     var currentIndex: Int = -1
     private var shuffledIndices: List<Int> = emptyList()
@@ -20,9 +27,6 @@ object PlayerManager {
     fun attach(controller: MediaController) {
         this.controller = controller
         controller.addListener(object : Player.Listener {
-            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-                // handled externally or via onTrackChanged
-            }
             override fun onPlaybackStateChanged(state: Int) {
                 if (state == Player.STATE_ENDED) {
                     playNext()
@@ -35,17 +39,24 @@ object PlayerManager {
         currentQueue = tracks
         currentIndex = startIndex
         if (playMode == PlayMode.SHUFFLE) {
-            shuffledIndices = (tracks.indices).toMutableList().shuffled()
+            generateShuffledIndices()
         }
         val track = currentQueue[currentIndex]
         resolveAndPlay(track)
+    }
+
+    private fun generateShuffledIndices() {
+        if (currentQueue.isEmpty()) return
+        val indices = currentQueue.indices.toMutableList()
+        // Şu anki şarkıyı başta tutmak isteyebiliriz, ama basitçe karıştırıyoruz:
+        shuffledIndices = indices.shuffled()
     }
 
     fun playNext() {
         if (currentQueue.isEmpty()) return
         val nextIndex = when (playMode) {
             PlayMode.SEQUENTIAL -> {
-                if (currentIndex + 1 < currentQueue.size) currentIndex + 1 else return
+                if (currentIndex + 1 < currentQueue.size) currentIndex + 1 else 0
             }
             PlayMode.SHUFFLE -> {
                 val pos = shuffledIndices.indexOf(currentIndex)
@@ -62,7 +73,7 @@ object PlayerManager {
         if (currentQueue.isEmpty()) return
         val prevIndex = when (playMode) {
             PlayMode.SEQUENTIAL -> {
-                if (currentIndex - 1 >= 0) currentIndex - 1 else return
+                if (currentIndex - 1 >= 0) currentIndex - 1 else currentQueue.size - 1
             }
             PlayMode.SHUFFLE -> {
                 val pos = shuffledIndices.indexOf(currentIndex)
@@ -83,12 +94,15 @@ object PlayerManager {
 
     private fun play(track: Track, url: String) {
         val c = controller ?: return
-        val mediaItem = MediaItem.Builder().setUri(url).setMediaId(track.id).build()
+        val mediaItem = MediaItem.Builder()
+            .setUri(url)
+            .setMediaId(track.id)
+            .build()
         c.setMediaItem(mediaItem)
         c.prepare()
         c.play()
-        onTrackChanged?.invoke(track)
+        onTrackChanged?.invoke(track, currentIndex)
     }
 
-    var onTrackChanged: ((Track) -> Unit)? = null
+    var onTrackChanged: ((Track, Int) -> Unit)? = null
 }
