@@ -1,17 +1,34 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="bg_primary">#0A0A0F</color>
-    <color name="bg_secondary">#12121A</color>
-    <color name="bg_card">#1A1A26</color>
-    <color name="bg_elevated">#22223A</color>
-    <color name="accent">#6C63FF</color>
-    <color name="accent_light">#9D97FF</color>
-    <color name="accent_dark">#4A44CC</color>
-    <color name="text_primary">#FFFFFF</color>
-    <color name="text_secondary">#9999BB</color>
-    <color name="text_hint">#555577</color>
-    <color name="divider">#1E1E30</color>
-    <color name="success">#4CAF50</color>
+    <!-- Ana arka planlar -->
+    <color name="bg_primary">#070710</color>
+    <color name="bg_secondary">#0F0F1A</color>
+    <color name="bg_card">#13131F</color>
+    <color name="bg_elevated">#1E1E32</color>
+
+    <!-- Gradient / vurgu renkleri -->
+    <color name="accent">#7C6FFF</color>
+    <color name="accent_light">#A89CFF</color>
+    <color name="accent_dark">#5548D9</color>
+    <color name="accent_glow">#3D2AFF</color>
+
+    <!-- İkincil vurgu: mor-pembe -->
+    <color name="accent2">#C961FF</color>
+    <color name="accent2_dark">#9B3FCC</color>
+
+    <!-- Metin -->
+    <color name="text_primary">#F0EEFF</color>
+    <color name="text_secondary">#8A84BB</color>
+    <color name="text_hint">#44405A</color>
+
+    <!-- Durum renkleri -->
+    <color name="success">#3DCC6B</color>
+    <color name="error">#FF4F6B</color>
+    <color name="warning">#FFB347</color>
+
+    <!-- Diğer -->
+    <color name="divider">#1B1B2E</color>
     <color name="white">#FFFFFF</color>
     <color name="black">#000000</color>
+    <color name="card_stroke">#2A2A45</color>
 </resources>

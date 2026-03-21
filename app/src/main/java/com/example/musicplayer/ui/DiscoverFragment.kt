@@ -23,7 +23,6 @@ import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.example.musicplayer.PlayerManager
-import com.example.musicplayer.PlayMode
 import com.example.musicplayer.TrackAdapter
 import com.example.musicplayer.api.InvidiousVideoInfo
 import com.example.musicplayer.api.SearchResponse
@@ -94,54 +93,110 @@ class DiscoverFragment : Fragment() {
         binding.etSearch.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == EditorInfo.IME_ACTION_SEARCH) { doSearch(); true } else false
         }
-        binding.btnModeSequential.setOnClickListener { setPlayMode(PlayMode.SEQUENTIAL) }
-        binding.btnModeShuffle.setOnClickListener { setPlayMode(PlayMode.SHUFFLE) }
-        binding.btnPlayAll.setOnClickListener {
-            if (currentTracks.isEmpty()) return@setOnClickListener
-            PlayerManager.urlResolver = { track, cb -> resolveAndPlay(track, cb) }
-            PlayerManager.playQueue(currentTracks.toList(), 0)
-        }
+        binding.btnDownloadAll.setOnClickListener { downloadAll("mp3") }
 
+        // Sayfalama: scroll dinleyici
         binding.rvTracks.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
                 if (dy <= 0) return
                 val lm = recyclerView.layoutManager as LinearLayoutManager
                 val last = lm.findLastVisibleItemPosition()
                 val total = lm.itemCount
-                if (!isLoadingMore && hasMore && last >= total - 4 && total > 0) loadMore()
+                if (!isLoadingMore && hasMore && total > 0 && last >= total - 3) {
+                    loadMore()
+                }
             }
         })
+    }
 
-        updatePlayModeUI()
+    override fun onHiddenChanged(hidden: Boolean) {
+        super.onHiddenChanged(hidden)
+        // Keşfet ekranına her dönüşte indirme durumlarını senkronize et
+        if (!hidden && currentTracks.isNotEmpty()) {
+            syncDownloadedState()
+        }
     }
 
     fun updatePlayingPosition(index: Int) {
         trackAdapter?.setPlayingPosition(index)
     }
 
+    // ─── Lokal dosya yolu bulma ───────────────────────────────
+
     /**
-     * MediaStore'daki Melodify dosyalarını okuyup adapter'ı senkronize eder.
-     * Uygulama açılınca veya yeni arama yapılınca çağrılır.
+     * videoId veya track adına göre lokal dosya yolunu döner.
+     * Varsa lokal URI, yoksa null.
      */
+    private fun findLocalUri(track: Track): String? {
+        val ctx = context ?: return null
+        val safeName = track.name.take(50).replace(Regex("[/\\\\:*?\"<>|]"), "_")
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            // MP3 ara
+            ctx.contentResolver.query(
+                MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                arrayOf(MediaStore.Audio.Media._ID),
+                "${MediaStore.Audio.Media.RELATIVE_PATH} LIKE ? AND ${MediaStore.Audio.Media.DISPLAY_NAME} = ?",
+                arrayOf("Music/Melodify/%", "$safeName.mp3"), null
+            )?.use { c ->
+                if (c.moveToFirst()) {
+                    val id = c.getLong(0)
+                    return android.content.ContentUris.withAppendedId(
+                        MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id
+                    ).toString()
+                }
+            }
+            // MP4 ara
+            ctx.contentResolver.query(
+                MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                arrayOf(MediaStore.Downloads._ID),
+                "${MediaStore.Downloads.RELATIVE_PATH} LIKE ? AND ${MediaStore.Downloads.DISPLAY_NAME} = ?",
+                arrayOf("Download/Melodify/%", "$safeName.mp4"), null
+            )?.use { c ->
+                if (c.moveToFirst()) {
+                    val id = c.getLong(0)
+                    return android.content.ContentUris.withAppendedId(
+                        MediaStore.Downloads.EXTERNAL_CONTENT_URI, id
+                    ).toString()
+                }
+            }
+        } else {
+            val mp3 = File(
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC),
+                "$safeName.mp3"
+            )
+            if (mp3.exists()) return mp3.absolutePath
+            val mp4 = File(
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+                "$safeName.mp4"
+            )
+            if (mp4.exists()) return mp4.absolutePath
+        }
+        return null
+    }
+
+    // ─── Sync: indirme durumlarını MediaStore'dan oku ─────────
+
     private fun syncDownloadedState() {
         lifecycleScope.launch(Dispatchers.IO) {
             val downloadedNames = getDownloadedFileNames()
             withContext(Dispatchers.Main) {
                 currentTracks.forEachIndexed { index, track ->
+                    // Aktif indirme varsa dokunma
+                    if (activeDownloads.containsKey(track.id)) return@forEachIndexed
                     val safeName = track.name.take(50).replace(Regex("[/\\\\:*?\"<>|]"), "_")
-                    if (downloadedNames.contains("$safeName.mp3") ||
-                        downloadedNames.contains("$safeName.mp4")) {
-                        trackAdapter?.markCompletedByPosition(index)
+                    val isDownloaded = downloadedNames.contains("$safeName.mp3") ||
+                            downloadedNames.contains("$safeName.mp4")
+                    val currentState = trackAdapter?.isDownloaded(index) ?: false
+                    when {
+                        isDownloaded && !currentState -> trackAdapter?.markCompletedByPosition(index)
+                        !isDownloaded && currentState -> trackAdapter?.cancelDownload(index)
                     }
                 }
             }
         }
     }
 
-    /**
-     * İndirilenler sayfasından dosya silinince çağrılır.
-     * Dosya adı (uzantısız) ile track'i bulup adapter durumunu sıfırlar.
-     */
     fun resetDownloadByPath(deletedFileName: String) {
         val position = currentTracks.indexOfFirst { track ->
             val safeName = track.name.take(50).replace(Regex("[/\\\\:*?\"<>|]"), "_")
@@ -152,32 +207,22 @@ class DiscoverFragment : Fragment() {
         }
     }
 
-    /** MediaStore'daki Music/Melodify ve Download/Melodify dosya adlarını döner */
     private fun getDownloadedFileNames(): Set<String> {
         val ctx = requireContext()
         val names = mutableSetOf<String>()
-
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            // MP3
             ctx.contentResolver.query(
                 MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
                 arrayOf(MediaStore.Audio.Media.DISPLAY_NAME),
                 "${MediaStore.Audio.Media.RELATIVE_PATH} LIKE ?",
                 arrayOf("Music/Melodify/%"), null
-            )?.use { c ->
-                while (c.moveToNext())
-                    c.getString(0)?.let { names.add(it) }
-            }
-            // MP4
+            )?.use { c -> while (c.moveToNext()) c.getString(0)?.let { names.add(it) } }
             ctx.contentResolver.query(
                 MediaStore.Downloads.EXTERNAL_CONTENT_URI,
                 arrayOf(MediaStore.Downloads.DISPLAY_NAME),
                 "${MediaStore.Downloads.RELATIVE_PATH} LIKE ?",
                 arrayOf("Download/Melodify/%"), null
-            )?.use { c ->
-                while (c.moveToNext())
-                    c.getString(0)?.let { names.add(it) }
-            }
+            )?.use { c -> while (c.moveToNext()) c.getString(0)?.let { names.add(it) } }
         } else {
             listOf(
                 Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC),
@@ -191,20 +236,7 @@ class DiscoverFragment : Fragment() {
         return names
     }
 
-    private fun setPlayMode(mode: PlayMode) {
-        PlayerManager.playMode = mode
-        updatePlayModeUI()
-    }
-
-    private fun updatePlayModeUI() {
-        val isSeq = PlayerManager.playMode == PlayMode.SEQUENTIAL
-        binding.btnModeSequential.backgroundTintList = android.content.res.ColorStateList.valueOf(
-            if (isSeq) android.graphics.Color.parseColor("#6C63FF") else android.graphics.Color.parseColor("#22223A")
-        )
-        binding.btnModeShuffle.backgroundTintList = android.content.res.ColorStateList.valueOf(
-            if (!isSeq) android.graphics.Color.parseColor("#6C63FF") else android.graphics.Color.parseColor("#22223A")
-        )
-    }
+    // ─── Retrofit kurulum ────────────────────────────────────
 
     private fun setupRetrofit() {
         val logging = HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.HEADERS }
@@ -235,22 +267,27 @@ class DiscoverFragment : Fragment() {
         }
     }
 
-    // ─── Arama ───────────────────────────────────────────────
+    // ─── Arama & Sayfalama ───────────────────────────────────
 
     private fun doSearch() {
         val query = binding.etSearch.text.toString().trim()
         if (query.isEmpty()) return
         currentQuery = query
         currentPage = 1
+        hasMore = false
+        isLoadingMore = false
         currentTracks.clear()
         binding.btnSearch.isEnabled = false
         binding.progressBar.visibility = View.VISIBLE
+        binding.loadMoreProgress.visibility = View.GONE
         fetchPage(1, reset = true)
     }
 
     private fun loadMore() {
         if (isLoadingMore || !hasMore) return
         isLoadingMore = true
+        // loadMore progress'i RecyclerView'ün en altına footer olarak ekle
+        trackAdapter?.setLoadingMore(true)
         fetchPage(currentPage + 1, reset = false)
     }
 
@@ -260,41 +297,58 @@ class DiscoverFragment : Fragment() {
 
         youtubeApi.search(currentQuery, searchCount, page).enqueue(object : Callback<SearchResponse> {
             override fun onResponse(call: Call<SearchResponse>, response: Response<SearchResponse>) {
-                if (!isAdded) return
+                if (!isAdded || _binding == null) return
                 binding.btnSearch.isEnabled = true
                 binding.progressBar.visibility = View.GONE
+                binding.loadMoreProgress.visibility = View.GONE
                 isLoadingMore = false
+                trackAdapter?.setLoadingMore(false)
 
-                if (response.isSuccessful) {
-                    val body = response.body() ?: return
-                    currentPage = body.page
-                    hasMore = body.hasMore
+                if (!response.isSuccessful) {
+                    hasMore = false
+                    if (!reset) Toast.makeText(requireContext(), "Daha fazla yüklenemedi (${response.code()})", Toast.LENGTH_SHORT).show()
+                    return
+                }
 
-                    val newTracks = body.tracks.map {
-                        Track(it.videoId, it.title, it.author, it.thumbnails, "", it.duration)
-                    }
+                val body = response.body() ?: run { hasMore = false; return }
+                currentPage = body.page
+                hasMore = body.hasMore
 
-                    if (reset) {
-                        currentTracks = newTracks.toMutableList()
-                        trackAdapter = TrackAdapter(
-                            currentTracks,
-                            onTrackClick = { track ->
-                                val index = currentTracks.indexOf(track)
+                val newTracks = body.tracks.map {
+                    Track(it.videoId, it.title, it.author, it.thumbnails, "", it.duration)
+                }
+
+                if (reset) {
+                    currentTracks = newTracks.toMutableList()
+                    trackAdapter = TrackAdapter(
+                        currentTracks,
+                        onTrackClick = { track ->
+                            val index = currentTracks.indexOf(track)
+                            // İndirilmiş mi? Lokal dosyadan çal
+                            val localUri = findLocalUri(track)
+                            if (localUri != null) {
+                                PlayerManager.urlResolver = { t, cb -> cb(localUri) }
+                                PlayerManager.playQueue(currentTracks.toList(), index)
+                            } else {
+                                // Online çal
                                 PlayerManager.urlResolver = { t, cb -> resolveAndPlay(t, cb) }
                                 PlayerManager.playQueue(currentTracks.toList(), index)
-                            },
-                            onDownloadClick = { track, pos -> showDownloadOptions(track, pos) },
-                            onLongClick = { track -> showAddToPlaylistDialog(track) },
-                            onCancelDownload = { fakeId -> cancelDownloadByFakeId(fakeId) }
-                        )
-                        binding.rvTracks.adapter = trackAdapter
-                        binding.playModeBar.visibility = View.VISIBLE
-                        // MediaStore'daki indirilen dosyalarla senkronize et
-                        syncDownloadedState()
-                    } else if (newTracks.isNotEmpty()) {
+                            }
+                        },
+                        onDownloadClick = { track, pos -> showDownloadOptions(track, pos) },
+                        onLongClick = { track -> showAddToPlaylistDialog(track) },
+                        onCancelDownload = { fakeId -> cancelDownloadByFakeId(fakeId) }
+                    )
+                    binding.rvTracks.adapter = trackAdapter
+                    binding.btnDownloadAll.visibility = View.VISIBLE
+                    syncDownloadedState()
+                } else {
+                    if (newTracks.isNotEmpty()) {
                         val startPos = currentTracks.size
                         currentTracks.addAll(newTracks)
                         trackAdapter?.notifyItemRangeInserted(startPos, newTracks.size)
+                        // Yeni eklenen şarkıların indirme durumunu da sync et
+                        syncDownloadedState()
                     } else {
                         hasMore = false
                     }
@@ -302,11 +356,14 @@ class DiscoverFragment : Fragment() {
             }
 
             override fun onFailure(call: Call<SearchResponse>, t: Throwable) {
-                if (!isAdded) return
+                if (!isAdded || _binding == null) return
                 binding.btnSearch.isEnabled = true
                 binding.progressBar.visibility = View.GONE
+                binding.loadMoreProgress.visibility = View.GONE
                 isLoadingMore = false
+                trackAdapter?.setLoadingMore(false)
                 Log.e(TAG, "Search failure: ${t.message}")
+                Toast.makeText(requireContext(), "Bağlantı hatası", Toast.LENGTH_SHORT).show()
             }
         })
     }
@@ -314,13 +371,19 @@ class DiscoverFragment : Fragment() {
     // ─── İndirme ─────────────────────────────────────────────
 
     private fun showDownloadOptions(track: Track, position: Int) {
-        // Zaten indiriliyor mu?
+        // Zaten aktif indirme var mı?
         if (activeDownloads.containsKey(track.id)) {
             Toast.makeText(requireContext(), "Bu şarkı zaten indiriliyor", Toast.LENGTH_SHORT).show()
             return
         }
         // Zaten indirildi mi? (adapter state)
         if (trackAdapter?.isDownloaded(position) == true) {
+            Toast.makeText(requireContext(), "Bu şarkı zaten indirildi", Toast.LENGTH_SHORT).show()
+            return
+        }
+        // Disk kontrolü (adapter state yoksa bile)
+        if (findLocalUri(track) != null) {
+            trackAdapter?.markCompletedByPosition(position)
             Toast.makeText(requireContext(), "Bu şarkı zaten indirildi", Toast.LENGTH_SHORT).show()
             return
         }
@@ -336,9 +399,35 @@ class DiscoverFragment : Fragment() {
             }.show()
     }
 
+    /** Sanatçının tüm şarkılarını (mevcut arama sonuçlarını) toplu indir */
+    fun downloadAll(format: String = "mp3") {
+        val notDownloaded = currentTracks.filterIndexed { index, track ->
+            !activeDownloads.containsKey(track.id) &&
+            trackAdapter?.isDownloaded(index) != true &&
+            findLocalUri(track) == null
+        }
+        if (notDownloaded.isEmpty()) {
+            Toast.makeText(requireContext(), "Tüm şarkılar zaten indirilmiş", Toast.LENGTH_SHORT).show()
+            return
+        }
+        AlertDialog.Builder(requireContext())
+            .setTitle("Toplu İndir")
+            .setMessage("${notDownloaded.size} şarkı MP3 olarak indirilsin mi?")
+            .setPositiveButton("İndir") { _, _ ->
+                notDownloaded.forEach { track ->
+                    val pos = currentTracks.indexOf(track)
+                    if (pos >= 0) startDownload(track, pos, format, null)
+                }
+                Toast.makeText(requireContext(), "${notDownloaded.size} indirme başlatıldı", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton("İptal", null)
+            .show()
+    }
+
     private fun startDownload(track: Track, position: Int, format: String, quality: String?) {
         val ext = if (format == "mp3") "mp3" else "mp4"
-        val fileName = "${track.name.take(50).replace(Regex("[/\\\\:*?\"<>|]"), "_")}.$ext"
+        val safeName = track.name.take(50).replace(Regex("[/\\\\:*?\"<>|]"), "_")
+        val fileName = "$safeName.$ext"
 
         var url = "${BASE_URL}download/${track.id}?format=$format"
         if (quality != null) url += "&quality=$quality"
@@ -363,23 +452,32 @@ class DiscoverFragment : Fragment() {
                 val req = Request.Builder().url(url).build()
                 val call = downloadClient.newCall(req)
 
-                // İptal flag'i set edilince OkHttp call'ını da iptal et
+                // İptal watcher — cancelled flag set edilince OkHttp call'ını iptal et
                 val cancelWatcher = launch {
                     while (true) {
                         if (cancelled.get()) { call.cancel(); break }
-                        kotlinx.coroutines.delay(200)
+                        kotlinx.coroutines.delay(100)
                     }
                 }
 
-                val resp = call.execute()
-                cancelWatcher.cancel() // bağlantı kuruldu, watcher'a gerek yok
+                val resp = try {
+                    call.execute()
+                } catch (e: Exception) {
+                    cancelWatcher.cancel()
+                    if (cancelled.get()) {
+                        // Kullanıcı iptal etti — UI zaten cancelDownloadByFakeId'de sıfırlandı
+                        return@launch
+                    }
+                    throw e
+                }
+                cancelWatcher.cancel()
 
                 if (cancelled.get()) return@launch
 
                 if (!resp.isSuccessful) {
                     val msg = when (resp.code) {
-                        429  -> "Sunucu kapasitesi dolu, lütfen bekleyin"
-                        503  -> "Sunucu geçici olarak kullanılamıyor"
+                        429 -> "Sunucu kapasitesi dolu, lütfen bekleyin"
+                        503 -> "Sunucu geçici olarak kullanılamıyor"
                         else -> "İndirme başarısız (${resp.code})"
                     }
                     withContext(Dispatchers.Main) {
@@ -396,10 +494,8 @@ class DiscoverFragment : Fragment() {
 
                 val totalBytes = body.contentLength()
 
-                // OutputStream aç: Android 10+ MediaStore, Android 9- doğrudan dosya
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     if (format == "mp3") {
-                        // MP3 → Müzik kütüphanesi
                         val collection = MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
                         val values = ContentValues().apply {
                             put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
@@ -410,7 +506,6 @@ class DiscoverFragment : Fragment() {
                         mediaStoreUri = ctx.contentResolver.insert(collection, values)
                             ?: throw Exception("MediaStore kaydı oluşturulamadı")
                     } else {
-                        // MP4 → Download klasörü (tüm telefonlarda dosya yöneticisinde görünür)
                         val collection = MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
                         val values = ContentValues().apply {
                             put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
@@ -457,16 +552,13 @@ class DiscoverFragment : Fragment() {
                                 lastUiUpdate = now
                                 val pct = ((downloaded * 100) / totalBytes).toInt()
                                 withContext(Dispatchers.Main) { trackAdapter?.updateProgress(fakeId, pct) }
-                                nm?.notify(notifId, notifBuilder
-                                    .setProgress(100, pct, false)
-                                    .setContentText("$pct%").build())
+                                nm?.notify(notifId, notifBuilder.setProgress(100, pct, false).setContentText("$pct%").build())
                             }
                         }
                     }
                 }
-                outputStream = null  // use {} kapattı, null yap ki finally tekrar kapatmasın
+                outputStream = null
 
-                // Başarılı: MediaStore kaydını görünür yap / MediaScanner tetikle
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     mediaStoreUri?.let { uri ->
                         ctx.contentResolver.update(uri, ContentValues().apply {
@@ -475,9 +567,7 @@ class DiscoverFragment : Fragment() {
                     }
                 } else {
                     legacyFile?.let { f ->
-                        MediaScannerConnection.scanFile(ctx, arrayOf(f.absolutePath), null) { path, _ ->
-                            Log.d(TAG, "Scanned: $path")
-                        }
+                        MediaScannerConnection.scanFile(ctx, arrayOf(f.absolutePath), null) { _, _ -> }
                     }
                 }
 
@@ -499,15 +589,16 @@ class DiscoverFragment : Fragment() {
                         trackAdapter?.cancelDownload(position)
                     }
                 }
-                // Hata veya iptal: yarım MediaStore kaydını temizle
-                mediaStoreUri?.let { runCatching { ctx.contentResolver.delete(it, null, null) } }
-                legacyFile?.runCatching { if (exists()) delete() }
             } finally {
                 outputStream?.runCatching { close() }
-                // Sadece iptal edilmişse yarım dosyayı sil, başarılı indirmede dokunma
                 if (cancelled.get()) {
+                    // İptal: yarım dosyayı sil
                     mediaStoreUri?.let { runCatching { ctx.contentResolver.delete(it, null, null) } }
                     legacyFile?.runCatching { delete() }
+                    // UI sıfırla (cancelDownloadByFakeId'den çağrılmışsa zaten sıfırlandı, tekrar sorun değil)
+                    withContext(Dispatchers.Main) {
+                        trackAdapter?.cancelDownload(position)
+                    }
                 }
                 activeDownloads.remove(track.id)
                 fakeIdToVideoId.remove(fakeId)
@@ -523,7 +614,6 @@ class DiscoverFragment : Fragment() {
         val (job, cancelled) = activeDownloads[videoId] ?: return
         cancelled.set(true)
         job.cancel()
-        // activeDownloads ve fakeIdToVideoId finally'de temizlenir
         val position = trackAdapter?.positionForFakeId(fakeId) ?: return
         trackAdapter?.cancelDownload(position)
     }

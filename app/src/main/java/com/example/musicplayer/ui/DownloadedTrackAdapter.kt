@@ -1,6 +1,7 @@
 package com.example.musicplayer.ui
 
 import android.app.AlertDialog
+import android.graphics.PorterDuff
 import android.view.LayoutInflater
 import android.view.ViewGroup
 import androidx.recyclerview.widget.RecyclerView
@@ -23,13 +24,34 @@ class DownloadedTrackAdapter(
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         val file = files[position]
         holder.binding.apply {
-            // Format ikonu + isim
-            val typeIcon = if (file.isVideo) "🎬" else "🎵"
-            tvFileName.text = "$typeIcon ${file.name}"
+            tvFileName.text = file.name
             tvFileSize.text = formatSize(file.size)
+
+            // Video için mor-pembe, MP3 için mor-mavi ikon tonu
+            val iconTint = if (file.isVideo)
+                android.graphics.Color.parseColor("#C961FF")
+            else
+                android.graphics.Color.parseColor("#7C6FFF")
+            ivMusicIcon.setColorFilter(iconTint, android.graphics.PorterDuff.Mode.SRC_IN)
+
+            // Video için film-kuşağı simgesi, MP3 için play simgesi
+            ivMusicIcon.setImageResource(
+                if (file.isVideo) android.R.drawable.ic_media_ff
+                else android.R.drawable.ic_media_play
+            )
+
+            // Video kartı kenarlığını farklı renkte göster
+            root.strokeColor = if (file.isVideo)
+                android.graphics.Color.parseColor("#3D2455")
+            else
+                android.graphics.Color.parseColor("#2A2A45")
 
             root.setOnClickListener { onPlayClick(file) }
             btnPlay.setOnClickListener { onPlayClick(file) }
+
+            // Video için oynat ikonu da farklı renk
+            btnPlay.setColorFilter(iconTint, android.graphics.PorterDuff.Mode.SRC_IN)
+
             btnDelete.setOnClickListener {
                 AlertDialog.Builder(holder.itemView.context)
                     .setTitle("Sil")

@@ -140,6 +140,12 @@ class MainActivity : AppCompatActivity() {
                 binding.miniPlayerPlayPause.setImageResource(android.R.drawable.ic_media_pause)
             }
         }
+        binding.miniPlayerPrev.setOnClickListener {
+            PlayerManager.playPrev()
+        }
+        binding.miniPlayerNext.setOnClickListener {
+            PlayerManager.playNext()
+        }
     }
 
     private fun wireCallbacks() {
@@ -185,6 +191,7 @@ class MainActivity : AppCompatActivity() {
         runOnUiThread {
             binding.miniPlayer.visibility = View.VISIBLE
             binding.miniPlayerTitle.text = track.name
+            binding.miniPlayerTitle.isSelected = true  // marquee scroll için
             binding.miniPlayerArtist.text = track.artistName
             binding.miniPlayerPlayPause.setImageResource(android.R.drawable.ic_media_pause)
             if (track.image.isNotEmpty()) {
