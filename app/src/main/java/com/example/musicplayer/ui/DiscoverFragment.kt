@@ -94,7 +94,6 @@ class DiscoverFragment : Fragment() {
         binding.etSearch.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == EditorInfo.IME_ACTION_SEARCH) { doSearch(); true } else false
         }
-        binding.btnDownloadAll.setOnClickListener { downloadAll("mp3") }
         binding.btnSelectAll.setOnClickListener { trackAdapter?.selectAll() }
         binding.btnCancelSelection.setOnClickListener { trackAdapter?.exitSelectionMode() }
         binding.btnDownloadSelected.setOnClickListener { downloadSelected() }
@@ -304,16 +303,13 @@ class DiscoverFragment : Fragment() {
                             if (!isAdded || _binding == null) return@TrackAdapter
                             if (count == -1) {
                                 binding.selectionBar.visibility = View.GONE
-                                binding.btnDownloadAll.visibility = if (currentTracks.isNotEmpty()) View.VISIBLE else View.GONE
                             } else {
                                 binding.selectionBar.visibility = View.VISIBLE
-                                binding.btnDownloadAll.visibility = View.GONE
                                 binding.tvSelectionCount.text = "$count şarkı seçildi"
                             }
                         }
                     )
                     binding.rvTracks.adapter = trackAdapter
-                    binding.btnDownloadAll.visibility = if (currentTracks.isNotEmpty()) View.VISIBLE else View.GONE
                     syncDownloadedState(0)
                 } else {
                     if (newTracks.isNotEmpty()) {
