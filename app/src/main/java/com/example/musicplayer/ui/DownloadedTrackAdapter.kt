@@ -5,7 +5,6 @@ import android.graphics.PorterDuff
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.view.animation.AccelerateDecelerateInterpolator
 import androidx.recyclerview.widget.RecyclerView
 import com.example.musicplayer.databinding.ItemDownloadedTrackBinding
 
@@ -38,9 +37,11 @@ class DownloadedTrackAdapter(
 
             val iconTint = if (file.isVideo) Color.parseColor("#C961FF") else Color.parseColor("#7C6FFF")
             ivMusicIcon.setColorFilter(iconTint, PorterDuff.Mode.SRC_IN)
+            
+            // Sessiz mod yerine Play veya Video ikonu (Daha mantıklı)
             ivMusicIcon.setImageResource(
                 if (file.isVideo) android.R.drawable.ic_media_ff
-                else android.R.drawable.ic_lock_silent_mode
+                else android.R.drawable.ic_media_play
             )
 
             root.setCardBackgroundColor(
@@ -76,12 +77,6 @@ class DownloadedTrackAdapter(
                     onAddToPlaylist(file)
                 }
                 true
-            }
-
-            if (isSelected) {
-                root.animate().scaleX(0.97f).scaleY(0.97f).setDuration(100).start()
-            } else {
-                root.animate().scaleX(1f).scaleY(1f).setDuration(100).start()
             }
         }
     }

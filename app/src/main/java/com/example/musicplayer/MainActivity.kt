@@ -42,7 +42,7 @@ class MainActivity : AppCompatActivity() {
         ActivityResultContracts.RequestPermission()
     ) { isGranted: Boolean ->
         if (!isGranted) {
-            Toast.makeText(this, "Bildirim izni verilmedi, kontrolcü görünmeyebilir.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Bildirim izni verilmedi.", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -98,7 +98,10 @@ class MainActivity : AppCompatActivity() {
             val show = when (item.itemId) {
                 R.id.nav_discover -> discoverFragment
                 R.id.nav_playlists -> playlistsFragment
-                R.id.nav_downloads -> downloadsFragment
+                R.id.nav_downloads -> {
+                    downloadsFragment.loadDownloadedFiles() // Sekmeye girince yenile
+                    downloadsFragment
+                }
                 R.id.nav_settings -> settingsFragment
                 else -> return@setOnItemSelectedListener false
             }
@@ -116,13 +119,9 @@ class MainActivity : AppCompatActivity() {
         controllerFuture?.addListener({
             controller?.let { 
                 PlayerManager.attach(it)
-                PlayerManager.urlResolver = { track, callback ->
-                    callback(track.audio)
-                }
             }
             PlayerManager.onTrackChanged = { track, index -> 
                 updateMiniPlayer(track)
-                // Also update adapters in fragments if they are visible
                 discoverFragment.updatePlayingPosition(index)
                 playlistDetailFragment.updatePlayingPosition(index)
             }
@@ -131,29 +130,12 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupMiniPlayer() {
         binding.miniPlayerPlayPause.setOnClickListener {
-            val c = controller ?: return@setOnClickListener
-            // Scale animasyonu
-            it.animate().scaleX(0.85f).scaleY(0.85f).setDuration(80).withEndAction {
-                it.animate().scaleX(1f).scaleY(1f).setDuration(120).start()
-            }.start()
-            if (c.isPlaying) {
-                c.pause()
-                binding.miniPlayerPlayPause.setImageResource(android.R.drawable.ic_media_play)
-            } else {
-                c.play()
-                binding.miniPlayerPlayPause.setImageResource(android.R.drawable.ic_media_pause)
-            }
+            PlayerManager.togglePlayPause()
         }
         binding.miniPlayerPrev.setOnClickListener {
-            it.animate().scaleX(0.8f).scaleY(0.8f).setDuration(80).withEndAction {
-                it.animate().scaleX(1f).scaleY(1f).setDuration(100).start()
-            }.start()
             PlayerManager.playPrev()
         }
         binding.miniPlayerNext.setOnClickListener {
-            it.animate().scaleX(0.8f).scaleY(0.8f).setDuration(80).withEndAction {
-                it.animate().scaleX(1f).scaleY(1f).setDuration(100).start()
-            }.start()
             PlayerManager.playNext()
         }
     }
@@ -162,10 +144,16 @@ class MainActivity : AppCompatActivity() {
         val playCallback: (Track, String) -> Unit = { track, url -> playTrack(track, url) }
 
         discoverFragment.onTrackSelected = playCallback
+        
+        // Yeni: İndirme bittiğinde haber ver
+        supportFragmentManager.setFragmentResultListener("download_complete", this) { _, _ ->
+            downloadsFragment.loadDownloadedFiles()
+        }
+
         downloadsFragment.onFileSelected = playCallback
         downloadsFragment.onFileDeleted = { path -> discoverFragment.resetDownloadByPath(path) }
+        
         playlistDetailFragment.onTrackSelected = playCallback
-
         playlistsFragment.onPlaylistClick = { playlist -> openPlaylistDetail(playlist) }
         playlistDetailFragment.onBack = {
             supportFragmentManager.beginTransaction()
@@ -177,7 +165,6 @@ class MainActivity : AppCompatActivity() {
     private fun openPlaylistDetail(playlist: PlaylistEntity) {
         playlistDetailFragment.playlistId = playlist.id
         playlistDetailFragment.playlistName = playlist.name
-
         val all = listOf(discoverFragment, playlistsFragment, downloadsFragment, settingsFragment)
         val tx = supportFragmentManager.beginTransaction()
         all.forEach { tx.hide(it) }
@@ -185,10 +172,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun playTrack(track: Track, url: String) {
-        val c = controller ?: run {
-            Toast.makeText(this, "Player hazırlanıyor", Toast.LENGTH_SHORT).show()
-            return
-        }
+        val c = controller ?: return
         val mediaItem = androidx.media3.common.MediaItem.Builder()
             .setUri(url).setMediaId(track.id).build()
         c.setMediaItem(mediaItem)
@@ -199,19 +183,9 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateMiniPlayer(track: Track) {
         runOnUiThread {
-            val wasGone = binding.miniPlayer.visibility == View.GONE
             binding.miniPlayer.visibility = View.VISIBLE
-            if (wasGone) {
-                binding.miniPlayer.translationY = 100f
-                binding.miniPlayer.alpha = 0f
-                binding.miniPlayer.animate()
-                    .translationY(0f).alpha(1f).setDuration(300)
-                    .setInterpolator(android.view.animation.DecelerateInterpolator()).start()
-            }
             binding.miniPlayerTitle.text = track.name
-            binding.miniPlayerTitle.isSelected = true
             binding.miniPlayerArtist.text = track.artistName
-            binding.miniPlayerPlayPause.setImageResource(android.R.drawable.ic_media_pause)
             if (track.image.isNotEmpty()) {
                 binding.miniPlayerArt.load(track.image) {
                     transformations(RoundedCornersTransformation(12f))

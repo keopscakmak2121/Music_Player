@@ -159,7 +159,6 @@ class DownloadsFragment : Fragment() {
         binding.btnCancelSelection.setOnClickListener { currentAdapter?.exitSelectionMode() }
         binding.btnDeleteSelected.setOnClickListener { confirmDeleteSelected() }
         
-        // Yeni: Seçilenleri Listeye Ekle butonu
         binding.btnAddToPlaylistSelected.setOnClickListener {
             val selected = currentAdapter?.getSelectedFiles() ?: return@setOnClickListener
             if (selected.isEmpty()) return@setOnClickListener
@@ -226,34 +225,63 @@ class DownloadsFragment : Fragment() {
     private fun queryMelodifyFiles(): List<LocalFile> {
         val result = mutableListOf<LocalFile>()
         val ctx = requireContext()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val audioProjection = arrayOf(MediaStore.Audio.Media._ID, MediaStore.Audio.Media.DISPLAY_NAME, MediaStore.Audio.Media.SIZE, MediaStore.Audio.Media.DATA)
-            ctx.contentResolver.query(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, audioProjection, "${MediaStore.Audio.Media.RELATIVE_PATH} LIKE ?", arrayOf("Music/Melodify/%"), "${MediaStore.Audio.Media.DATE_ADDED} DESC")?.use { cursor ->
-                val idCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
-                val nameCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME)
-                val sizeCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.SIZE)
-                val dataCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA)
-                while (cursor.moveToNext()) {
-                    val uri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, cursor.getLong(idCol))
-                    result.add(LocalFile(uri, cursor.getString(dataCol) ?: "", cursor.getString(nameCol).substringBeforeLast("."), cursor.getLong(sizeCol), false))
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                // Müzik ve Download klasörlerindeki tüm dosyaları esnek şekilde tara
+                val collections = listOf(
+                    MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                    MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
+                    MediaStore.Downloads.EXTERNAL_CONTENT_URI
+                )
+                
+                collections.forEach { uri ->
+                    val projection = arrayOf(
+                        MediaStore.MediaColumns._ID,
+                        MediaStore.MediaColumns.DISPLAY_NAME,
+                        MediaStore.MediaColumns.SIZE,
+                        MediaStore.MediaColumns.DATA,
+                        MediaStore.MediaColumns.RELATIVE_PATH
+                    )
+                    
+                    ctx.contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
+                        val idCol = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns._ID)
+                        val nameCol = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DISPLAY_NAME)
+                        val sizeCol = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.SIZE)
+                        val dataCol = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DATA)
+                        val pathCol = cursor.getColumnIndex(MediaStore.MediaColumns.RELATIVE_PATH)
+                        
+                        while (cursor.moveToNext()) {
+                            val path = if (pathCol != -1) cursor.getString(pathCol) ?: "" else ""
+                            val name = cursor.getString(nameCol) ?: ""
+                            
+                            // Sadece Melodify klasöründekileri al
+                            if (path.contains("Melodify", ignoreCase = true)) {
+                                val id = cursor.getLong(idCol)
+                                val size = cursor.getLong(sizeCol)
+                                val data = cursor.getString(dataCol) ?: ""
+                                val fileUri = ContentUris.withAppendedId(uri, id)
+                                val isVideo = name.endsWith(".mp4", ignoreCase = true) || uri == MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+                                
+                                result.add(LocalFile(fileUri, data, name.substringBeforeLast("."), size, isVideo))
+                            }
+                        }
+                    }
                 }
-            }
-            val videoProjection = arrayOf(MediaStore.Video.Media._ID, MediaStore.Video.Media.DISPLAY_NAME, MediaStore.Video.Media.SIZE, MediaStore.Video.Media.DATA)
-            ctx.contentResolver.query(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, videoProjection, "${MediaStore.Video.Media.RELATIVE_PATH} LIKE ?", arrayOf("Download/Melodify/%"), "${MediaStore.Video.Media.DATE_ADDED} DESC")?.use { cursor ->
-                val idCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media._ID)
-                val nameCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DISPLAY_NAME)
-                val sizeCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.SIZE)
-                val dataCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DATA)
-                while (cursor.moveToNext()) {
-                    val name = cursor.getString(nameCol) ?: continue
-                    if (name.endsWith(".mp4")) {
-                        val uri = ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, cursor.getLong(idCol))
-                        result.add(LocalFile(uri, cursor.getString(dataCol) ?: "", name.substringBeforeLast("."), cursor.getLong(sizeCol), true))
+            } else {
+                // Android 9- ve altı için klasör bazlı tarama
+                listOf(
+                    File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC), "Melodify"),
+                    File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "Melodify")
+                ).forEach { dir ->
+                    if (dir.exists()) {
+                        dir.walkTopDown().filter { it.isFile && (it.extension == "mp3" || it.extension == "mp4") }.forEach { f ->
+                            result.add(LocalFile(Uri.fromFile(f), f.absolutePath, f.nameWithoutExtension, f.length(), f.extension == "mp4"))
+                        }
                     }
                 }
             }
-        }
-        return result
+        } catch (e: Exception) {}
+        return result.distinctBy { it.path } // Aynı dosyayı mükerrer ekleme
     }
 
     private fun confirmDelete(file: LocalFile) {

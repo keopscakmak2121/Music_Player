@@ -1,6 +1,7 @@
 package com.example.musicplayer.adapter
 
 import android.view.LayoutInflater
+import android.view.View
 import android.view.ViewGroup
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
@@ -26,8 +27,7 @@ class PlaylistSongAdapter(
     }
 
     fun setPlayingPosition(position: Int) {
-        val old = playingPosition
-        playingPosition = position
+        val old = playingPosition; playingPosition = position
         if (old >= 0) notifyItemChanged(old)
         if (position >= 0) notifyItemChanged(position)
     }
@@ -47,19 +47,18 @@ class PlaylistSongAdapter(
             tvArtistName.text = song.author
             tvDuration.text = formatDuration(song.duration)
             
-            downloadProgress.visibility = android.view.View.GONE
-            tvDownloadPercent.visibility = android.view.View.GONE
-            
-            // Play butonu tamamen gizlendi
-            btnPlay.visibility = android.view.View.GONE
-            
-            // Silme butonu sağda kalsın
-            btnDownload.setImageResource(android.R.drawable.ic_menu_delete)
-            btnDownload.setColorFilter(android.graphics.Color.parseColor("#FF5555"))
+            btnPlay.visibility = View.GONE
+            downloadProgress.visibility = View.GONE
+            tvDownloadPercent.visibility = View.GONE
 
-            ivAlbumArt.load(song.thumbnail) {
-                transformations(RoundedCornersTransformation(10f))
-                placeholder(android.R.drawable.ic_lock_silent_mode)
+            if (song.thumbnail.isNotEmpty()) {
+                ivAlbumArt.load(song.thumbnail) {
+                    transformations(RoundedCornersTransformation(10f))
+                }
+            } else {
+                // Sessiz mod yerine Play ikonu (Daha mantıklı)
+                ivAlbumArt.setImageResource(android.R.drawable.ic_media_play)
+                ivAlbumArt.setColorFilter(android.graphics.Color.parseColor("#7C6FFF"))
             }
 
             if (isActuallyPlaying) {
@@ -70,13 +69,13 @@ class PlaylistSongAdapter(
                 root.strokeColor = if (isThisTrack) android.graphics.Color.parseColor("#444466") else 0
             }
 
-            // Çalma işlemi satıra tıklanınca yapılacak
             root.setOnClickListener { onClick(song, position) }
-
+            btnDownload.setImageResource(android.R.drawable.ic_menu_delete)
+            btnDownload.setColorFilter(android.graphics.Color.parseColor("#FF5555"))
             btnDownload.setOnClickListener {
                 android.app.AlertDialog.Builder(holder.itemView.context)
                     .setTitle("Kaldır")
-                    .setMessage("\"${song.title}\" listeden kaldırılsın mi?")
+                    .setMessage("\"${song.title}\" listeden kaldırılsın mı?")
                     .setPositiveButton("Kaldır") { _, _ -> onRemove(song) }
                     .setNegativeButton("İptal", null)
                     .show()
