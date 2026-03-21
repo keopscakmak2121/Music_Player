@@ -18,7 +18,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:paddingStart="10dp"
-        android:paddingEnd="6dp"
+        android:paddingEnd="10dp"
         android:paddingTop="11dp"
         android:paddingBottom="11dp">
 
@@ -43,12 +43,13 @@
             app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintBottom_toBottomOf="parent" />
 
-        <!-- Şarkı adı -->
+        <!-- Şarkı adı: Sola albüm kapağına yaslı, sağa ise en sağdaki butona kadar gider -->
         <TextView
             android:id="@+id/tvTrackName"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginStart="12dp"
+            android:layout_marginEnd="8dp"
             android:ellipsize="end"
             android:maxLines="1"
             android:textColor="@color/text_primary"
@@ -60,12 +61,13 @@
             app:layout_constraintBottom_toTopOf="@+id/tvArtistName"
             app:layout_constraintVertical_chainStyle="packed" />
 
-        <!-- Sanatçı -->
+        <!-- Sanatçı adı -->
         <TextView
             android:id="@+id/tvArtistName"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginTop="3dp"
+            android:layout_marginEnd="8dp"
             android:ellipsize="end"
             android:maxLines="1"
             android:textColor="@color/text_secondary"
@@ -80,28 +82,25 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="3dp"
+            android:layout_marginEnd="8dp"
             android:textColor="@color/text_hint"
             android:textSize="11sp"
             app:layout_constraintEnd_toStartOf="@+id/btnPlay"
             app:layout_constraintTop_toBottomOf="@+id/tvTrackName" />
 
-        <!-- İndirme progress -->
+        <!-- Progress -->
         <ProgressBar
             android:id="@+id/downloadProgress"
             style="@android:style/Widget.ProgressBar.Horizontal"
             android:layout_width="0dp"
             android:layout_height="3dp"
             android:layout_marginTop="7dp"
-            android:indeterminate="false"
-            android:max="100"
-            android:progressTint="@color/accent"
-            android:progressBackgroundTint="@color/bg_elevated"
+            android:layout_marginEnd="8dp"
             android:visibility="gone"
             app:layout_constraintEnd_toStartOf="@+id/btnPlay"
             app:layout_constraintStart_toStartOf="@+id/tvTrackName"
             app:layout_constraintTop_toBottomOf="@+id/tvArtistName" />
 
-        <!-- Durum metni -->
         <TextView
             android:id="@+id/tvDownloadPercent"
             android:layout_width="wrap_content"
@@ -113,7 +112,7 @@
             app:layout_constraintStart_toStartOf="@+id/tvTrackName"
             app:layout_constraintTop_toBottomOf="@+id/downloadProgress" />
 
-        <!-- Play butonu -->
+        <!-- Play butonu (Görünürlüğü kodla GONE yapılacak) -->
         <ImageButton
             android:id="@+id/btnPlay"
             android:layout_width="40dp"
@@ -127,7 +126,7 @@
             app:layout_constraintEnd_toStartOf="@+id/btnDownload"
             app:layout_constraintTop_toTopOf="parent" />
 
-        <!-- İndir butonu -->
+        <!-- Sil/İndir butonu (Her zaman en sağda çıpa olarak durur) -->
         <ImageButton
             android:id="@+id/btnDownload"
             android:layout_width="40dp"

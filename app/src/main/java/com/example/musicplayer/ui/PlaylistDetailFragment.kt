@@ -1,6 +1,10 @@
 package com.example.musicplayer.ui
 
+import android.content.Context
+import android.os.Build
 import android.os.Bundle
+import android.os.Environment
+import android.provider.MediaStore
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -25,6 +29,7 @@ import retrofit2.Callback
 import retrofit2.Response
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
+import java.io.File
 import java.util.concurrent.TimeUnit
 
 class PlaylistDetailFragment : Fragment() {
@@ -66,9 +71,21 @@ class PlaylistDetailFragment : Fragment() {
 
         songAdapter = PlaylistSongAdapter(
             onClick = { song, index ->
-                val tracks = songList.map { it.toTrack() }
-                PlayerManager.urlResolver = { track, cb -> resolveAndPlay(track, cb) }
-                PlayerManager.playQueue(tracks, index)
+                val track = song.toTrack()
+                val currentPlayingId = PlayerManager.currentQueue.getOrNull(PlayerManager.currentIndex)?.id
+                
+                if (track.id == currentPlayingId) {
+                    PlayerManager.togglePlayPause()
+                } else {
+                    val localUri = findLocalUri(track.name)
+                    if (localUri != null) {
+                        play(songList.map { it.toTrack() }, localUri, index)
+                    } else {
+                        resolveAndPlay(track) { url ->
+                            play(songList.map { it.toTrack() }, url, index)
+                        }
+                    }
+                }
             },
             onRemove = { song ->
                 lifecycleScope.launch {
@@ -81,23 +98,28 @@ class PlaylistDetailFragment : Fragment() {
         binding.rvSongs.layoutManager = LinearLayoutManager(requireContext())
         binding.rvSongs.adapter = songAdapter
 
+        binding.btnModeSequential.setOnClickListener { setPlayMode(PlayMode.SEQUENTIAL) }
+        binding.btnModeShuffle.setOnClickListener { setPlayMode(PlayMode.SHUFFLE) }
+        
         binding.btnPlayAll.setOnClickListener {
             if (songList.isEmpty()) return@setOnClickListener
-            PlayerManager.playMode = PlayMode.SEQUENTIAL
-            val tracks = songList.map { it.toTrack() }
-            PlayerManager.urlResolver = { track, cb -> resolveAndPlay(track, cb) }
-            PlayerManager.playQueue(tracks, 0)
+            val track = songList[0].toTrack()
+            val localUri = findLocalUri(track.name)
+            if (localUri != null) {
+                play(songList.map { it.toTrack() }, localUri, 0)
+            } else {
+                resolveAndPlay(track) { url ->
+                    play(songList.map { it.toTrack() }, url, 0)
+                }
+            }
         }
 
-        binding.btnShuffle.setOnClickListener {
-            if (songList.isEmpty()) return@setOnClickListener
-            PlayerManager.playMode = PlayMode.SHUFFLE
-            val tracks = songList.map { it.toTrack() }
-            PlayerManager.urlResolver = { track, cb -> resolveAndPlay(track, cb) }
-            PlayerManager.playQueue(tracks, 0)
+        PlayerManager.onPlaybackStateChangedListener = {
+            songAdapter.notifyDataSetChanged()
         }
 
         loadPlaylistSongs()
+        updatePlayModeUI()
     }
 
     fun updatePlayingPosition(index: Int) {
@@ -106,9 +128,55 @@ class PlaylistDetailFragment : Fragment() {
         }
     }
 
+    private fun setPlayMode(mode: PlayMode) {
+        PlayerManager.playMode = mode
+        updatePlayModeUI()
+    }
+
+    private fun updatePlayModeUI() {
+        val selectedColor = android.graphics.Color.parseColor("#7C6FFF")
+        val inactiveColor = android.graphics.Color.parseColor("#22223A")
+        val isSeq = PlayerManager.playMode == PlayMode.SEQUENTIAL
+
+        binding.btnModeSequential.apply {
+            backgroundTintList = android.content.res.ColorStateList.valueOf(if (isSeq) selectedColor else inactiveColor)
+            setTextColor(if (isSeq) android.graphics.Color.WHITE else android.graphics.Color.parseColor("#9999BB"))
+            text = if (isSeq) "✓ SIRALI" else "SIRALI"
+        }
+        binding.btnModeShuffle.apply {
+            backgroundTintList = android.content.res.ColorStateList.valueOf(if (!isSeq) selectedColor else inactiveColor)
+            setTextColor(if (!isSeq) android.graphics.Color.WHITE else android.graphics.Color.parseColor("#9999BB"))
+            text = if (!isSeq) "✓ KARIŞIK" else "🔀 KARIŞIK"
+        }
+    }
+
+    private fun play(tracks: List<Track>, url: String, index: Int) {
+        PlayerManager.urlResolver = { _, cb -> cb(url) }
+        PlayerManager.playQueue(tracks, index)
+        songAdapter.setPlayingPosition(index)
+    }
+
+    private fun findLocalUri(name: String): String? {
+        val ctx = context ?: return null
+        val safeName = name.take(50).replace(Regex("[/\\\\:*?\"<>|]"), "_").trim()
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val projection = arrayOf(MediaStore.MediaColumns._ID)
+                val selection = "${MediaStore.MediaColumns.DISPLAY_NAME} LIKE ?"
+                val args = arrayOf("%$safeName%")
+                ctx.contentResolver.query(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, projection, selection, args, null)?.use { c ->
+                    if (c.moveToFirst()) return android.content.ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, c.getLong(0)).toString()
+                }
+            } else {
+                val mp3 = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC), "Melodify/$safeName.mp3")
+                if (mp3.exists()) return mp3.absolutePath
+            }
+        } catch (e: Exception) {}
+        return null
+    }
+
     fun loadPlaylistSongs() {
-        if (playlistId == -1L) return
-        
+        if (playlistId == -1L || !isAdded) return
         loadJob?.cancel()
         loadJob = lifecycleScope.launch {
             val db = AppDatabase.getInstance(requireContext())
@@ -117,46 +185,21 @@ class PlaylistDetailFragment : Fragment() {
                 songAdapter.submitList(songs)
                 binding.tvSongCount.text = "${songs.size} şarkı"
                 binding.emptyView.visibility = if (songs.isEmpty()) View.VISIBLE else View.GONE
-                binding.rvSongs.visibility = if (songs.isEmpty()) View.GONE else View.VISIBLE
             }
         }
     }
 
     private fun setupRetrofit() {
-        val client = OkHttpClient.Builder()
-            .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(60, TimeUnit.SECONDS)
-            .build()
-        youtubeApi = Retrofit.Builder()
-            .baseUrl("http://77.92.154.224:5050/")
-            .client(client)
-            .addConverterFactory(GsonConverterFactory.create())
-            .build()
-            .create(YouTubeApi::class.java)
+        val client = OkHttpClient.Builder().connectTimeout(30, TimeUnit.SECONDS).build()
+        youtubeApi = Retrofit.Builder().baseUrl("http://77.92.154.224:5050/").client(client).addConverterFactory(GsonConverterFactory.create()).build().create(YouTubeApi::class.java)
     }
 
-    private fun isLocalFile(id: String): Boolean {
-        return id.startsWith("/") ||
-               (id.length > 2 && id[1] == ':') ||
-               id.endsWith(".mp3") ||
-               id.endsWith(".m4a") ||
-               id.endsWith(".webm")
-    }
-
-    private fun resolveAndPlay(track: Track, callback: ((String) -> Unit)? = null) {
-        if (isLocalFile(track.id)) {
-            val url = track.id
-            callback?.invoke(url)
-            return
-        }
+    private fun resolveAndPlay(track: Track, callback: (String) -> Unit) {
         youtubeApi.getVideoInfo(track.id).enqueue(object : Callback<InvidiousVideoInfo> {
             override fun onResponse(call: Call<InvidiousVideoInfo>, response: Response<InvidiousVideoInfo>) {
-                val url = response.body()?.url ?: return
-                callback?.invoke(url)
+                response.body()?.url?.let { callback(it) }
             }
-            override fun onFailure(call: Call<InvidiousVideoInfo>, t: Throwable) {
-                Toast.makeText(requireContext(), "Hata: ${t.message}", Toast.LENGTH_SHORT).show()
-            }
+            override fun onFailure(call: Call<InvidiousVideoInfo>, t: Throwable) {}
         })
     }
 

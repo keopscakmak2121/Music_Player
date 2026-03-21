@@ -23,7 +23,7 @@
             android:layout_width="40dp"
             android:layout_height="40dp"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:src="@android:drawable/ic_media_previous"
+            android:src="@android:drawable/ic_menu_revert"
             android:tint="@color/text_primary" />
 
         <LinearLayout
@@ -38,7 +38,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:textColor="@color/text_primary"
-                android:textSize="20sp"
+                android:textSize="18sp"
                 android:textStyle="bold" />
 
             <TextView
@@ -46,34 +46,49 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:textColor="@color/text_secondary"
-                android:textSize="13sp" />
+                android:textSize="12sp" />
         </LinearLayout>
 
-        <!-- Play All -->
+        <!-- Mod Butonları -->
         <Button
-            android:id="@+id/btnPlayAll"
+            android:id="@+id/btnModeSequential"
+            style="?android:attr/borderlessButtonStyle"
             android:layout_width="wrap_content"
-            android:layout_height="36dp"
-            android:layout_marginEnd="6dp"
-            android:backgroundTint="@color/accent"
-            android:paddingStart="14dp"
-            android:paddingEnd="14dp"
-            android:text="▶ Tümü"
-            android:textColor="@color/white"
-            android:textSize="12sp" />
-
-        <!-- Shuffle -->
-        <Button
-            android:id="@+id/btnShuffle"
-            android:layout_width="wrap_content"
-            android:layout_height="36dp"
+            android:layout_height="32dp"
+            android:layout_marginEnd="4dp"
             android:backgroundTint="@color/bg_elevated"
-            android:paddingStart="14dp"
-            android:paddingEnd="14dp"
-            android:text="🔀"
-            android:textColor="@color/white"
-            android:textSize="12sp" />
+            android:paddingStart="10dp"
+            android:paddingEnd="10dp"
+            android:text="SIRALI"
+            android:textColor="@color/text_secondary"
+            android:textSize="10sp" />
+
+        <Button
+            android:id="@+id/btnModeShuffle"
+            style="?android:attr/borderlessButtonStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="32dp"
+            android:backgroundTint="@color/bg_elevated"
+            android:paddingStart="10dp"
+            android:paddingEnd="10dp"
+            android:text="🔀 KARIŞIK"
+            android:textColor="@color/text_secondary"
+            android:textSize="10sp" />
     </LinearLayout>
+
+    <!-- Tümünü Çal butonu -->
+    <Button
+        android:id="@+id/btnPlayAll"
+        style="?android:attr/borderlessButtonStyle"
+        android:layout_width="match_parent"
+        android:layout_height="36dp"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="8dp"
+        android:backgroundTint="@color/accent"
+        android:text="▶ TÜMÜNÜ ÇAL"
+        android:textColor="@color/white"
+        android:textSize="11sp" />
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/rvSongs"
@@ -95,16 +110,9 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Playlist boş"
+            android:text="Liste boş"
             android:textColor="@color/text_secondary"
             android:textSize="15sp" />
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:text="Keşfet sekmesinden şarkı ekleyebilirsin"
-            android:textColor="@color/text_hint"
-            android:textSize="13sp" />
     </LinearLayout>
 
 </LinearLayout>

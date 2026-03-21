@@ -31,14 +31,14 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent" />
 
-        <!-- Tür ikonu (Hata düzeltildi: Özel kaynak yerine standart simge kullanıldı) -->
+        <!-- Tür ikonu (Play tuşu olmayan sade bir ikon) -->
         <ImageView
             android:id="@+id/ivMusicIcon"
             android:layout_width="38dp"
             android:layout_height="38dp"
-            android:src="@android:drawable/ic_lock_silent_mode"
+            android:src="@android:drawable/ic_menu_sort_alphabetically"
             android:tint="@color/accent"
-            android:padding="6dp"
+            android:padding="8dp"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintStart_toEndOf="@+id/checkBox"
             app:layout_constraintTop_toTopOf="parent" />

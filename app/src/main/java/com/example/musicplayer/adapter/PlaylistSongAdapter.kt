@@ -1,6 +1,5 @@
 package com.example.musicplayer.adapter
 
-import android.app.AlertDialog
 import android.view.LayoutInflater
 import android.view.ViewGroup
 import androidx.recyclerview.widget.DiffUtil
@@ -10,6 +9,7 @@ import coil.load
 import coil.transform.RoundedCornersTransformation
 import com.example.musicplayer.databinding.ItemTrackBinding
 import com.example.musicplayer.db.PlaylistSongEntity
+import com.example.musicplayer.PlayerManager
 
 class PlaylistSongAdapter(
     private val onClick: (PlaylistSongEntity, Int) -> Unit,
@@ -39,48 +39,44 @@ class PlaylistSongAdapter(
 
     override fun onBindViewHolder(holder: VH, position: Int) {
         val song = getItem(position)
-        val isPlaying = position == playingPosition
+        val isThisTrack = position == playingPosition
+        val isActuallyPlaying = isThisTrack && PlayerManager.isPlaying()
 
         holder.binding.apply {
             tvTrackName.text = song.title
             tvArtistName.text = song.author
             tvDuration.text = formatDuration(song.duration)
+            
             downloadProgress.visibility = android.view.View.GONE
             tvDownloadPercent.visibility = android.view.View.GONE
-
-            if (isPlaying) {
-                ivAlbumArt.load(song.thumbnail) {
-                    transformations(RoundedCornersTransformation(10f))
-                    placeholder(android.R.drawable.ic_media_play)
-                }
-                ivAlbumArt.setColorFilter(
-                    android.graphics.Color.parseColor("#996C63FF"),
-                    android.graphics.PorterDuff.Mode.SRC_ATOP
-                )
-                root.setCardBackgroundColor(android.graphics.Color.parseColor("#1E1A33"))
-                root.strokeColor = android.graphics.Color.parseColor("#6C63FF")
-                root.strokeWidth = 3
-                tvTrackName.setTextColor(android.graphics.Color.parseColor("#9D97FF"))
-            } else {
-                ivAlbumArt.load(song.thumbnail) {
-                    transformations(RoundedCornersTransformation(10f))
-                    placeholder(android.R.drawable.ic_media_play)
-                }
-                ivAlbumArt.clearColorFilter()
-                root.setCardBackgroundColor(android.graphics.Color.parseColor("#1A1A26"))
-                root.strokeWidth = 0
-                tvTrackName.setTextColor(android.graphics.Color.WHITE)
-            }
-
-            root.setOnClickListener { onClick(song, position) }
-
+            
+            // Play butonu tamamen gizlendi
+            btnPlay.visibility = android.view.View.GONE
+            
+            // Silme butonu sağda kalsın
             btnDownload.setImageResource(android.R.drawable.ic_menu_delete)
             btnDownload.setColorFilter(android.graphics.Color.parseColor("#FF5555"))
-            btnDownload.isEnabled = true
+
+            ivAlbumArt.load(song.thumbnail) {
+                transformations(RoundedCornersTransformation(10f))
+                placeholder(android.R.drawable.ic_lock_silent_mode)
+            }
+
+            if (isActuallyPlaying) {
+                root.strokeWidth = 2
+                root.strokeColor = android.graphics.Color.parseColor("#7C6FFF")
+            } else {
+                root.strokeWidth = if (isThisTrack) 2 else 0
+                root.strokeColor = if (isThisTrack) android.graphics.Color.parseColor("#444466") else 0
+            }
+
+            // Çalma işlemi satıra tıklanınca yapılacak
+            root.setOnClickListener { onClick(song, position) }
+
             btnDownload.setOnClickListener {
-                AlertDialog.Builder(holder.itemView.context)
+                android.app.AlertDialog.Builder(holder.itemView.context)
                     .setTitle("Kaldır")
-                    .setMessage("\"${song.title}\" listeden kaldırılsın mı?")
+                    .setMessage("\"${song.title}\" listeden kaldırılsın mi?")
                     .setPositiveButton("Kaldır") { _, _ -> onRemove(song) }
                     .setNegativeButton("İptal", null)
                     .show()
@@ -89,8 +85,7 @@ class PlaylistSongAdapter(
     }
 
     private fun formatDuration(seconds: Int): String {
-        val m = seconds / 60
-        val s = seconds % 60
+        val m = seconds / 60; val s = seconds % 60
         return "%d:%02d".format(m, s)
     }
 }
