@@ -138,15 +138,12 @@ class DiscoverFragment : Fragment() {
                 val selection = "${MediaStore.MediaColumns.DISPLAY_NAME} LIKE ?"
                 val args = arrayOf("%$safeName%")
                 
-                // Audio
                 ctx.contentResolver.query(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, projection, selection, args, null)?.use { c ->
                     if (c.moveToFirst()) return android.content.ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, c.getLong(0)).toString()
                 }
-                // Video
                 ctx.contentResolver.query(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, projection, selection, args, null)?.use { c ->
                     if (c.moveToFirst()) return android.content.ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, c.getLong(0)).toString()
                 }
-                // Downloads
                 ctx.contentResolver.query(MediaStore.Downloads.EXTERNAL_CONTENT_URI, projection, selection, args, null)?.use { c ->
                     if (c.moveToFirst()) return android.content.ContentUris.withAppendedId(MediaStore.Downloads.EXTERNAL_CONTENT_URI, c.getLong(0)).toString()
                 }
@@ -208,14 +205,11 @@ class DiscoverFragment : Fragment() {
         val ctx = context ?: return emptySet()
         val names = mutableSetOf<String>()
         try {
-            val collections = mutableListOf(
-                MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
-            )
+            val collections = mutableListOf(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 collections.add(MediaStore.Video.Media.EXTERNAL_CONTENT_URI)
                 collections.add(MediaStore.Downloads.EXTERNAL_CONTENT_URI)
             }
-            
             collections.forEach { uri ->
                 ctx.contentResolver.query(uri, arrayOf(MediaStore.MediaColumns.DISPLAY_NAME), null, null, null)?.use { c ->
                     val nameIdx = c.getColumnIndexOrThrow(MediaStore.MediaColumns.DISPLAY_NAME)
@@ -224,7 +218,6 @@ class DiscoverFragment : Fragment() {
                     }
                 }
             }
-            
             listOf(
                 File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC), "Melodify"),
                 File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "Melodify")
@@ -303,15 +296,20 @@ class DiscoverFragment : Fragment() {
                     currentTracks = newTracks.toMutableList()
                     trackAdapter = TrackAdapter(
                         currentTracks,
-                        onTrackClick = { track ->
-                            val index = currentTracks.indexOf(track)
-                            PlayerManager.urlResolver = { t, cb ->
-                                if (t.audio.isNotEmpty()) cb(t.audio) else resolveAndPlay(t, cb)
-                            }
-                            PlayerManager.playQueue(currentTracks.toList(), index)
-                        },
+                        onTrackClick = { /* Satıra tıklanınca bir şey yapma */ },
                         onDownloadClick = { track, pos -> showDownloadOptions(track, pos) },
-                        onLongClick = { track -> showAddToPlaylistDialog(track) },
+                        onPlayClick = { track, pos ->
+                            // Akıllı Çalma: İndirilmişse lokalden, değilse online
+                            val localUri = findLocalUri(track)
+                            if (localUri != null) {
+                                play(track, localUri, pos)
+                            } else {
+                                resolveAndPlay(track) { onlineUrl ->
+                                    play(track, onlineUrl, pos)
+                                }
+                            }
+                        },
+                        onLongClick = { track -> /* Seçim modu tetiklenir adapter içinde */ },
                         onCancelDownload = { fakeId -> cancelDownloadByFakeId(fakeId) },
                         onSelectionChanged = { count ->
                             if (!isAdded || _binding == null) return@TrackAdapter
@@ -345,6 +343,12 @@ class DiscoverFragment : Fragment() {
                 trackAdapter?.setLoadingMore(false)
             }
         })
+    }
+
+    private fun play(track: Track, url: String, position: Int) {
+        PlayerManager.urlResolver = { t, cb -> cb(url) }
+        PlayerManager.playQueue(currentTracks.toList(), position)
+        trackAdapter?.setPlayingPosition(position)
     }
 
     private fun showDownloadOptions(track: Track, position: Int) {

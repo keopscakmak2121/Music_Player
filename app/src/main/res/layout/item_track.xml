@@ -22,7 +22,7 @@
         android:paddingTop="11dp"
         android:paddingBottom="11dp">
 
-        <!-- Seçim checkbox (seçim modunda görünür) -->
+        <!-- Seçim checkbox -->
         <CheckBox
             android:id="@+id/checkBox"
             android:layout_width="28dp"
@@ -54,7 +54,7 @@
             android:textColor="@color/text_primary"
             android:textSize="14sp"
             android:textStyle="bold"
-            app:layout_constraintEnd_toStartOf="@+id/btnDownload"
+            app:layout_constraintEnd_toStartOf="@+id/btnPlay"
             app:layout_constraintStart_toEndOf="@+id/ivAlbumArt"
             app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintBottom_toTopOf="@+id/tvArtistName"
@@ -72,8 +72,7 @@
             android:textSize="12sp"
             app:layout_constraintEnd_toStartOf="@+id/tvDuration"
             app:layout_constraintStart_toStartOf="@+id/tvTrackName"
-            app:layout_constraintTop_toBottomOf="@+id/tvTrackName"
-            app:layout_constraintBottom_toTopOf="@+id/downloadProgress" />
+            app:layout_constraintTop_toBottomOf="@+id/tvTrackName" />
 
         <!-- Süre -->
         <TextView
@@ -83,9 +82,8 @@
             android:layout_marginTop="3dp"
             android:textColor="@color/text_hint"
             android:textSize="11sp"
-            app:layout_constraintEnd_toStartOf="@+id/btnDownload"
-            app:layout_constraintTop_toBottomOf="@+id/tvTrackName"
-            app:layout_constraintBottom_toTopOf="@+id/downloadProgress" />
+            app:layout_constraintEnd_toStartOf="@+id/btnPlay"
+            app:layout_constraintTop_toBottomOf="@+id/tvTrackName" />
 
         <!-- İndirme progress -->
         <ProgressBar
@@ -99,10 +97,9 @@
             android:progressTint="@color/accent"
             android:progressBackgroundTint="@color/bg_elevated"
             android:visibility="gone"
-            app:layout_constraintEnd_toStartOf="@+id/btnDownload"
+            app:layout_constraintEnd_toStartOf="@+id/btnPlay"
             app:layout_constraintStart_toStartOf="@+id/tvTrackName"
-            app:layout_constraintTop_toBottomOf="@+id/tvArtistName"
-            app:layout_constraintBottom_toBottomOf="parent" />
+            app:layout_constraintTop_toBottomOf="@+id/tvArtistName" />
 
         <!-- Durum metni -->
         <TextView
@@ -115,6 +112,20 @@
             android:visibility="gone"
             app:layout_constraintStart_toStartOf="@+id/tvTrackName"
             app:layout_constraintTop_toBottomOf="@+id/downloadProgress" />
+
+        <!-- Play butonu -->
+        <ImageButton
+            android:id="@+id/btnPlay"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginEnd="4dp"
+            android:background="@drawable/bg_play_button"
+            android:src="@android:drawable/ic_media_play"
+            android:tint="@color/white"
+            android:padding="8dp"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toStartOf="@+id/btnDownload"
+            app:layout_constraintTop_toTopOf="parent" />
 
         <!-- İndir butonu -->
         <ImageButton
