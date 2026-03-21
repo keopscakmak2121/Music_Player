@@ -58,7 +58,6 @@ class DiscoverFragment : Fragment() {
     private var trackAdapter: TrackAdapter? = null
     private var currentTracks: MutableList<Track> = mutableListOf()
 
-    // videoId → (coroutine Job, cancelled flag, okhttp call)
     private val activeDownloads = mutableMapOf<String, Triple<Job, AtomicBoolean, okhttp3.Call?>>()
     private val activeCallRef = mutableMapOf<String, okhttp3.Call>()
     private val fakeIdToVideoId = mutableMapOf<Long, String>()
@@ -69,13 +68,16 @@ class DiscoverFragment : Fragment() {
     private var isLoadingMore = false
     private var hasMore = false
 
-    // MainActivity tarafından dinlenen callback (Eksik olan kısım)
     var onTrackSelected: ((Track, String) -> Unit)? = null
 
     companion object {
         private const val TAG = "MelodifySearch"
         const val BASE_URL = "http://77.92.154.224:5050/"
         private const val NOTIF_CHANNEL = "melodify_downloads"
+        
+        fun getSafeFileName(name: String): String {
+            return name.take(50).replace(Regex("[/\\\\:*?\"<>|]"), "_").trim()
+        }
     }
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
@@ -98,7 +100,6 @@ class DiscoverFragment : Fragment() {
         binding.btnCancelSelection.setOnClickListener { trackAdapter?.exitSelectionMode() }
         binding.btnDownloadSelected.setOnClickListener { downloadSelected() }
 
-        // Sonsuz Kaydırma (Infinite Scroll)
         binding.rvTracks.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
                 if (dy > 0) {
@@ -113,50 +114,51 @@ class DiscoverFragment : Fragment() {
         })
     }
 
+    override fun onResume() {
+        super.onResume()
+        if (currentTracks.isNotEmpty()) syncDownloadedState()
+    }
+
     override fun onHiddenChanged(hidden: Boolean) {
         super.onHiddenChanged(hidden)
-        if (!hidden && currentTracks.isNotEmpty()) {
-            syncDownloadedState()
-        }
+        if (!hidden && currentTracks.isNotEmpty()) syncDownloadedState()
     }
 
     fun updatePlayingPosition(index: Int) {
         trackAdapter?.setPlayingPosition(index)
     }
 
-    // ─── Lokal dosya yolu bulma ───────────────────────────────
-
     private fun findLocalUri(track: Track): String? {
         val ctx = context ?: return null
-        val safeName = track.name.take(50).replace(Regex("[/\\\\:*?\"<>|]"), "_")
+        val safeName = getSafeFileName(track.name)
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            ctx.contentResolver.query(
-                MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-                arrayOf(MediaStore.Audio.Media._ID),
-                "${MediaStore.Audio.Media.RELATIVE_PATH} LIKE ? AND ${MediaStore.Audio.Media.DISPLAY_NAME} = ?",
-                arrayOf("Music/Melodify/%", "$safeName.mp3"), null
-            )?.use { c ->
-                if (c.moveToFirst()) return android.content.ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, c.getLong(0)).toString()
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val projection = arrayOf(MediaStore.MediaColumns._ID)
+                val selection = "${MediaStore.MediaColumns.DISPLAY_NAME} LIKE ?"
+                val args = arrayOf("%$safeName%")
+                
+                // Audio
+                ctx.contentResolver.query(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, projection, selection, args, null)?.use { c ->
+                    if (c.moveToFirst()) return android.content.ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, c.getLong(0)).toString()
+                }
+                // Video
+                ctx.contentResolver.query(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, projection, selection, args, null)?.use { c ->
+                    if (c.moveToFirst()) return android.content.ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, c.getLong(0)).toString()
+                }
+                // Downloads
+                ctx.contentResolver.query(MediaStore.Downloads.EXTERNAL_CONTENT_URI, projection, selection, args, null)?.use { c ->
+                    if (c.moveToFirst()) return android.content.ContentUris.withAppendedId(MediaStore.Downloads.EXTERNAL_CONTENT_URI, c.getLong(0)).toString()
+                }
+            } else {
+                val mp3 = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC), "Melodify/$safeName.mp3")
+                if (mp3.exists()) return mp3.absolutePath
+                val mp4 = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "Melodify/$safeName.mp4")
+                if (mp4.exists()) return mp4.absolutePath
             }
-            ctx.contentResolver.query(
-                MediaStore.Downloads.EXTERNAL_CONTENT_URI,
-                arrayOf(MediaStore.Downloads._ID),
-                "${MediaStore.Downloads.RELATIVE_PATH} LIKE ? AND ${MediaStore.Downloads.DISPLAY_NAME} = ?",
-                arrayOf("Download/Melodify/%", "$safeName.mp4"), null
-            )?.use { c ->
-                if (c.moveToFirst()) return android.content.ContentUris.withAppendedId(MediaStore.Downloads.EXTERNAL_CONTENT_URI, c.getLong(0)).toString()
-            }
-        } else {
-            val mp3 = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC), "$safeName.mp3")
-            if (mp3.exists()) return mp3.absolutePath
-            val mp4 = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "$safeName.mp4")
-            if (mp4.exists()) return mp4.absolutePath
-        }
+        } catch (e: Exception) { Log.e(TAG, "findLocalUri error", e) }
         return null
     }
-
-    // ─── Sync: indirme durumlarını MediaStore'dan oku ─────────
 
     private fun syncDownloadedState(fromIndex: Int = 0) {
         if (!isAdded || _binding == null) return
@@ -171,8 +173,8 @@ class DiscoverFragment : Fragment() {
                 val track = tracksToSync[i]
                 if (activeDownloads.containsKey(track.id)) continue
                 
-                val safeName = track.name.take(50).replace(Regex("[/\\\\:*?\"<>|]"), "_")
-                val isDownloaded = downloadedNames.contains("$safeName.mp3") || downloadedNames.contains("$safeName.mp4")
+                val safeName = getSafeFileName(track.name)
+                val isDownloaded = downloadedNames.any { it.contains(safeName, true) }
                 
                 if (isDownloaded) {
                     val uri = findLocalUri(track)
@@ -203,22 +205,37 @@ class DiscoverFragment : Fragment() {
     }
 
     private fun getDownloadedFileNames(): Set<String> {
-        val ctx = requireContext()
+        val ctx = context ?: return emptySet()
         val names = mutableSetOf<String>()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            ctx.contentResolver.query(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, arrayOf(MediaStore.Audio.Media.DISPLAY_NAME), "${MediaStore.Audio.Media.RELATIVE_PATH} LIKE ?", arrayOf("Music/Melodify/%"), null)
-                ?.use { c -> while (c.moveToNext()) c.getString(0)?.let { names.add(it) } }
-            ctx.contentResolver.query(MediaStore.Downloads.EXTERNAL_CONTENT_URI, arrayOf(MediaStore.Downloads.DISPLAY_NAME), "${MediaStore.Downloads.RELATIVE_PATH} LIKE ?", arrayOf("Download/Melodify/%"), null)
-                ?.use { c -> while (c.moveToNext()) c.getString(0)?.let { names.add(it) } }
-        } else {
-            listOf(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC), Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)).forEach { dir ->
-                dir.walkTopDown().filter { it.isFile && (it.extension == "mp3" || it.extension == "mp4") }.forEach { names.add(it.name) }
+        try {
+            val collections = mutableListOf(
+                MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+            )
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                collections.add(MediaStore.Video.Media.EXTERNAL_CONTENT_URI)
+                collections.add(MediaStore.Downloads.EXTERNAL_CONTENT_URI)
             }
-        }
+            
+            collections.forEach { uri ->
+                ctx.contentResolver.query(uri, arrayOf(MediaStore.MediaColumns.DISPLAY_NAME), null, null, null)?.use { c ->
+                    val nameIdx = c.getColumnIndexOrThrow(MediaStore.MediaColumns.DISPLAY_NAME)
+                    while (c.moveToNext()) {
+                        c.getString(nameIdx)?.let { names.add(it) }
+                    }
+                }
+            }
+            
+            listOf(
+                File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC), "Melodify"),
+                File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "Melodify")
+            ).forEach { dir ->
+                if (dir.exists()) {
+                    dir.listFiles()?.forEach { if (it.isFile) names.add(it.name) }
+                }
+            }
+        } catch (e: Exception) { Log.e(TAG, "getDownloadedFileNames error", e) }
         return names
     }
-
-    // ─── Retrofit & Client ──────────────────────────────────
 
     private fun setupRetrofit() {
         val logging = HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.HEADERS }
@@ -236,8 +253,6 @@ class DiscoverFragment : Fragment() {
             requireContext().getSystemService(NotificationManager::class.java)?.createNotificationChannel(ch)
         }
     }
-
-    // ─── Arama & Sayfalama ───────────────────────────────────
 
     private fun doSearch() {
         val query = binding.etSearch.text.toString().trim()
@@ -273,7 +288,6 @@ class DiscoverFragment : Fragment() {
 
                 if (!response.isSuccessful) {
                     hasMore = false
-                    if (!reset) Toast.makeText(requireContext(), "Daha fazla yüklenemedi", Toast.LENGTH_SHORT).show()
                     return
                 }
 
@@ -329,21 +343,8 @@ class DiscoverFragment : Fragment() {
                 binding.progressBar.visibility = View.GONE
                 isLoadingMore = false
                 trackAdapter?.setLoadingMore(false)
-                Toast.makeText(requireContext(), "Bağlantı hatası", Toast.LENGTH_SHORT).show()
             }
         })
-    }
-
-    // ─── İndirme & Diğerleri ─────────────────────────────────
-
-    fun resetDownloadByPath(deletedFileName: String) {
-        val position = currentTracks.indexOfFirst { track ->
-            val safeName = track.name.take(50).replace(Regex("[/\\\\:*?\"<>|]"), "_")
-            safeName == deletedFileName
-        }
-        if (position >= 0) {
-            trackAdapter?.cancelDownload(position)
-        }
     }
 
     private fun showDownloadOptions(track: Track, position: Int) {
@@ -379,26 +380,9 @@ class DiscoverFragment : Fragment() {
             }.setNegativeButton("İptal", null).show()
     }
 
-    fun downloadAll(format: String = "mp3") {
-        val prefs = requireContext().getSharedPreferences("melodify_prefs", Context.MODE_PRIVATE)
-        val limit = prefs.getInt("download_limit", 3)
-        val notDownloaded = currentTracks.filter { !activeDownloads.containsKey(it.id) && it.audio.isEmpty() }
-        
-        if (notDownloaded.isEmpty()) return
-        AlertDialog.Builder(requireContext()).setTitle("Toplu İndir").setMessage("${notDownloaded.size} şarkı indirilsin mi?")
-            .setPositiveButton("İndir") { _, _ ->
-                var started = 0
-                notDownloaded.forEach { track ->
-                    if (started >= limit) return@forEach
-                    val pos = currentTracks.indexOf(track)
-                    if (pos >= 0) { startDownload(track, pos, format, null); started++ }
-                }
-            }.setNegativeButton("İptal", null).show()
-    }
-
     private fun startDownload(track: Track, position: Int, format: String, quality: String?) {
         val ext = if (format == "mp3") "mp3" else "mp4"
-        val safeName = track.name.take(50).replace(Regex("[/\\\\:*?\"<>|]"), "_")
+        val safeName = getSafeFileName(track.name)
         val fileName = "$safeName.$ext"
         var url = "${BASE_URL}download/${track.id}?format=$format"
         if (quality != null) url += "&quality=$quality"
@@ -417,6 +401,7 @@ class DiscoverFragment : Fragment() {
         val job = lifecycleScope.launch(Dispatchers.IO) {
             var mediaStoreUri: Uri? = null
             var outputStream: OutputStream? = null
+            var finalFile: File? = null
             try {
                 val req = Request.Builder().url(url).build()
                 val call = downloadClient.newCall(req)
@@ -443,10 +428,11 @@ class DiscoverFragment : Fragment() {
                     mediaStoreUri = ctx.contentResolver.insert(collection, values)
                     outputStream = ctx.contentResolver.openOutputStream(mediaStoreUri!!)
                 } else {
-                    val dir = if (format == "mp3") Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC)
-                              else Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                    val dir = File(if (format == "mp3") Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC)
+                              else Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "Melodify")
                     dir.mkdirs()
-                    outputStream = File(dir, fileName).outputStream()
+                    finalFile = File(dir, fileName)
+                    outputStream = finalFile.outputStream()
                 }
 
                 val notifBuilder = NotificationCompat.Builder(ctx, NOTIF_CHANNEL).setSmallIcon(android.R.drawable.stat_sys_download).setContentTitle(track.name).setProgress(100, 0, true)
@@ -473,14 +459,13 @@ class DiscoverFragment : Fragment() {
                 if (!cancelled.get()) {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                         ctx.contentResolver.update(mediaStoreUri!!, ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }, null, null)
+                    } else {
+                        MediaScannerConnection.scanFile(ctx, arrayOf(finalFile?.absolutePath), null, null)
                     }
+                    
                     withContext(Dispatchers.Main) {
                         trackAdapter?.markCompleted(fakeId)
-                        val localUri = findLocalUri(track)
-                        if (localUri != null) {
-                            val idx = currentTracks.indexOfFirst { it.id == track.id }
-                            if (idx >= 0) currentTracks[idx] = currentTracks[idx].copy(audio = localUri)
-                        }
+                        syncDownloadedState(position)
                     }
                 }
             } catch (e: Exception) {
@@ -522,6 +507,16 @@ class DiscoverFragment : Fragment() {
                     AppDatabase.getInstance(requireContext()).playlistSongDao().insertSong(PlaylistSongEntity(playlistId = playlists[i].id, videoId = track.id, title = track.name, author = track.artistName, thumbnail = track.image, duration = track.duration))
                 }
             }.show()
+        }
+    }
+
+    fun resetDownloadByPath(deletedFileName: String) {
+        val position = currentTracks.indexOfFirst { track ->
+            val safeName = getSafeFileName(track.name)
+            safeName == deletedFileName
+        }
+        if (position >= 0) {
+            trackAdapter?.cancelDownload(position)
         }
     }
 
