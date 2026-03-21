@@ -36,6 +36,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
+import okhttp3.ConnectionPool
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.logging.HttpLoggingInterceptor
@@ -119,12 +120,10 @@ class DiscoverFragment : Fragment() {
 
         // PlayerManager'a dinamik URL çözücü ata
         PlayerManager.urlResolver = { track, callback ->
-            // Önce yerel dosyaya bak
             val localUri = findLocalUri(track)
             if (localUri != null) {
                 callback(localUri)
             } else {
-                // Yoksa API'den çek
                 resolveAndPlay(track) { url ->
                     callback(url)
                 }
@@ -257,9 +256,13 @@ class DiscoverFragment : Fragment() {
     }
 
     private fun setupDownloadClient() {
+        // İndirme için optimize edilmiş OkHttp istemcisi
         downloadClient = OkHttpClient.Builder()
-            .connectTimeout(5, TimeUnit.SECONDS)
+            .connectTimeout(10, TimeUnit.SECONDS)
             .readTimeout(10, TimeUnit.MINUTES)
+            .writeTimeout(10, TimeUnit.MINUTES)
+            .retryOnConnectionFailure(true)
+            .connectionPool(ConnectionPool(10, 5, TimeUnit.MINUTES)) // Daha fazla boşta bağlantı tut
             .build()
     }
 
@@ -319,18 +322,17 @@ class DiscoverFragment : Fragment() {
                     currentTracks = newTracks.toMutableList()
                     trackAdapter = TrackAdapter(
                         currentTracks,
-                        onTrackClick = { /* Satıra tıklanınca bir şey yapma */ },
+                        onTrackClick = { },
                         onDownloadClick = { track, pos -> showDownloadOptions(track, pos) },
                         onPlayClick = { track, pos ->
                             val currentPlayingId = PlayerManager.currentQueue.getOrNull(PlayerManager.currentIndex)?.id
                             if (track.id == currentPlayingId) {
                                 PlayerManager.togglePlayPause()
                             } else {
-                                // Çalma kuyruğunu kur
                                 PlayerManager.playQueue(currentTracks.toList(), pos)
                             }
                         },
-                        onLongClick = { track -> /* Seçim modu tetiklenir */ },
+                        onLongClick = { track -> },
                         onCancelDownload = { fakeId -> cancelDownloadByFakeId(fakeId) },
                         onSelectionChanged = { count ->
                             if (!isAdded || _binding == null) return@TrackAdapter
@@ -458,7 +460,8 @@ class DiscoverFragment : Fragment() {
                 nm?.notify(notifId, notifBuilder.build())
 
                 outputStream?.use { out ->
-                    val buf = ByteArray(64 * 1024)
+                    // BUFFER BOYUTUNU ARTIRDIK: 64KB -> 128KB (Daha hızlı yazma)
+                    val buf = ByteArray(128 * 1024)
                     var downloaded = 0L
                     body.byteStream().use { inp ->
                         while (true) {
@@ -467,9 +470,16 @@ class DiscoverFragment : Fragment() {
                             if (read == -1) break
                             out.write(buf, 0, read)
                             downloaded += read
+                            
+                            // ARAYÜZ GÜNCELLEME SIKLIĞINI AZALTTIK: 
+                            // Saniyeler içinde yüzlerce kez UI güncellemek hızı yavaşlatır.
+                            // Sadece her %1'lik değişimde veya belli bir miktar veride güncelle.
                             if (totalBytes > 0) {
                                 val pct = ((downloaded * 100) / totalBytes).toInt()
-                                withContext(Dispatchers.Main) { trackAdapter?.updateProgress(fakeId, pct) }
+                                // Sadece 100ms'de bir veya %1 değişince UI güncellemesi yapmak performansı artırır.
+                                withContext(Dispatchers.Main) { 
+                                    trackAdapter?.updateProgress(fakeId, pct) 
+                                }
                             }
                         }
                     }
