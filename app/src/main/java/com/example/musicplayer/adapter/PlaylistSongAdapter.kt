@@ -51,15 +51,10 @@ class PlaylistSongAdapter(
             downloadProgress.visibility = View.GONE
             tvDownloadPercent.visibility = View.GONE
 
-            if (song.thumbnail.isNotEmpty()) {
-                ivAlbumArt.load(song.thumbnail) {
-                    transformations(RoundedCornersTransformation(10f))
-                }
-            } else {
-                // Sessiz mod yerine Play ikonu (Daha mantıklı)
-                ivAlbumArt.setImageResource(android.R.drawable.ic_media_play)
-                ivAlbumArt.setColorFilter(android.graphics.Color.parseColor("#7C6FFF"))
-            }
+            // Playlist şarkı resmi yerine Play ikonu yapıldı
+            ivAlbumArt.setImageResource(android.R.drawable.ic_media_play)
+            ivAlbumArt.setColorFilter(android.graphics.Color.parseColor("#7C6FFF"))
+            ivAlbumArt.setPadding(8, 8, 8, 8)
 
             if (isActuallyPlaying) {
                 root.strokeWidth = 2

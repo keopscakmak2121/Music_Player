@@ -37,14 +37,10 @@ class DownloadedTrackAdapter(
             tvFileName.text = file.name
             tvFileSize.text = formatSize(file.size)
 
-            // MODERLEŞTİRME: Dosyadan kapak resmi çekme (Coil MediaStore desteği)
-            ivMusicIcon.load(file.uri) {
-                crossfade(true)
-                // Hata düzeltildi: Standart Android ikonları kullanıldı
-                placeholder(if (file.isVideo) android.R.drawable.presence_video_online else android.R.drawable.ic_menu_gallery)
-                error(if (file.isVideo) android.R.drawable.presence_video_online else android.R.drawable.ic_menu_gallery)
-                transformations(RoundedCornersTransformation(16f))
-            }
+            // Şarkı resmi yerine Play ikonu yapıldı
+            ivMusicIcon.setImageResource(android.R.drawable.ic_media_play)
+            ivMusicIcon.setColorFilter(Color.parseColor("#7C6FFF"))
+            ivMusicIcon.setPadding(12, 12, 12, 12) // İkonun çok büyük görünmemesi için
 
             // Tasarım güncellemeleri
             root.setCardBackgroundColor(
