@@ -44,24 +44,6 @@ class SettingsFragment : Fragment() {
             prefs.edit().putInt("download_limit", limit).apply()
             Toast.makeText(requireContext(), "İndirme limiti $limit olarak ayarlandı", Toast.LENGTH_SHORT).show()
         }
-
-        // Arama sonucu sayısı
-        val searchCount = prefs.getInt("search_count", 20)
-        when (searchCount) {
-            20 -> binding.rbCount20.isChecked = true
-            50 -> binding.rbCount50.isChecked = true
-            100 -> binding.rbCount100.isChecked = true
-        }
-        binding.rgSearchCount.setOnCheckedChangeListener { _, checkedId ->
-            val count = when (checkedId) {
-                binding.rbCount20.id -> 20
-                binding.rbCount50.id -> 50
-                binding.rbCount100.id -> 100
-                else -> 20
-            }
-            prefs.edit().putInt("search_count", count).apply()
-            Toast.makeText(requireContext(), "Sayfa başına $count sonuç ayarlandı", Toast.LENGTH_SHORT).show()
-        }
     }
 
     override fun onDestroyView() {
