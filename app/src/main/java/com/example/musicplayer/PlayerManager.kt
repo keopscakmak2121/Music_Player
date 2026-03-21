@@ -40,6 +40,11 @@ object PlayerManager {
                     retryCount = 0
                     playNext()
                 }
+                onPlaybackStateChangedListener?.invoke(isPlaying())
+            }
+
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                onPlaybackStateChangedListener?.invoke(isPlaying)
             }
 
             override fun onPlayerError(error: PlaybackException) {
@@ -59,6 +64,17 @@ object PlayerManager {
                 }
             }
         })
+    }
+
+    fun isPlaying(): Boolean = controller?.isPlaying ?: false
+
+    fun togglePlayPause() {
+        val c = controller ?: return
+        if (c.isPlaying) {
+            c.pause()
+        } else {
+            c.play()
+        }
     }
 
     fun playQueue(tracks: List<Track>, startIndex: Int) {
@@ -135,4 +151,5 @@ object PlayerManager {
     }
 
     var onTrackChanged: ((Track, Int) -> Unit)? = null
+    var onPlaybackStateChangedListener: ((Boolean) -> Unit)? = null
 }

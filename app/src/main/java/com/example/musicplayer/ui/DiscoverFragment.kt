@@ -112,6 +112,11 @@ class DiscoverFragment : Fragment() {
                 }
             }
         })
+
+        // Çalma durumu değişince listeyi güncelle (Play/Pause ikonu için)
+        PlayerManager.onPlaybackStateChangedListener = { isPlaying ->
+            trackAdapter?.notifyDataSetChanged()
+        }
     }
 
     override fun onResume() {
@@ -299,17 +304,23 @@ class DiscoverFragment : Fragment() {
                         onTrackClick = { /* Satıra tıklanınca bir şey yapma */ },
                         onDownloadClick = { track, pos -> showDownloadOptions(track, pos) },
                         onPlayClick = { track, pos ->
-                            // Akıllı Çalma: İndirilmişse lokalden, değilse online
-                            val localUri = findLocalUri(track)
-                            if (localUri != null) {
-                                play(track, localUri, pos)
+                            val currentPlayingId = PlayerManager.currentQueue.getOrNull(PlayerManager.currentIndex)?.id
+                            if (track.id == currentPlayingId) {
+                                // Aynı şarkı ise çal/duraklat
+                                PlayerManager.togglePlayPause()
                             } else {
-                                resolveAndPlay(track) { onlineUrl ->
-                                    play(track, onlineUrl, pos)
+                                // Farklı şarkı ise baştan başlat (Akıllı Çalma)
+                                val localUri = findLocalUri(track)
+                                if (localUri != null) {
+                                    play(track, localUri, pos)
+                                } else {
+                                    resolveAndPlay(track) { onlineUrl ->
+                                        play(track, onlineUrl, pos)
+                                    }
                                 }
                             }
                         },
-                        onLongClick = { track -> /* Seçim modu tetiklenir adapter içinde */ },
+                        onLongClick = { track -> /* Seçim modu tetiklenir */ },
                         onCancelDownload = { fakeId -> cancelDownloadByFakeId(fakeId) },
                         onSelectionChanged = { count ->
                             if (!isAdded || _binding == null) return@TrackAdapter

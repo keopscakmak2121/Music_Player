@@ -1,11 +1,8 @@
 package com.example.musicplayer
 
-import android.animation.ObjectAnimator
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.view.animation.AccelerateDecelerateInterpolator
-import android.view.animation.LinearInterpolator
 import androidx.recyclerview.widget.RecyclerView
 import coil.load
 import coil.transform.RoundedCornersTransformation
@@ -21,7 +18,7 @@ class TrackAdapter(
     private val tracks: List<Track>,
     private val onTrackClick: (Track) -> Unit,
     private val onDownloadClick: (Track, Int) -> Unit,
-    private val onPlayClick: (Track, Int) -> Unit, // Yeni: Play butonu için
+    private val onPlayClick: (Track, Int) -> Unit,
     private val onLongClick: ((Track) -> Unit)? = null,
     private val onCancelDownload: ((Long) -> Unit)? = null,
     private val onSelectionChanged: ((Int) -> Unit)? = null
@@ -91,13 +88,8 @@ class TrackAdapter(
                 else android.graphics.Color.parseColor("#13131F")
             )
 
-            // Satıra tıklama artık sadece SEÇİM yapar, çalmaz
             root.setOnClickListener {
-                if (selectionMode) {
-                    toggleSelection(position)
-                } else {
-                    // Hiçbir şey yapma veya seçimi başlat
-                }
+                if (selectionMode) toggleSelection(position)
             }
 
             root.setOnLongClickListener {
@@ -108,7 +100,6 @@ class TrackAdapter(
                 true
             }
 
-            // OYNA BUTONU - Akıllı çalma
             btnPlay.setOnClickListener {
                 if (selectionMode) return@setOnClickListener
                 onPlayClick(track, position)
@@ -122,7 +113,7 @@ class TrackAdapter(
                         val fakeId = fakeIdForPosition(position)
                         if (fakeId != null) onCancelDownload?.invoke(fakeId)
                     }
-                    state == -1 -> { /* İndirildi */ }
+                    state == -1 -> { }
                     else -> onDownloadClick(track, position)
                 }
             }
@@ -132,17 +123,22 @@ class TrackAdapter(
     }
 
     private fun bindPlayingState(binding: ItemTrackBinding, position: Int, track: Track) {
-        val isPlaying = position == playingPosition
+        // Hata buradaydı: Sadece pozisyona bakıyordu, çalma durumuna bakmıyordu.
+        val isThisTrack = position == playingPosition
+        val isActuallyPlaying = isThisTrack && PlayerManager.isPlaying()
+
         binding.apply {
-            if (isPlaying) {
-                ivAlbumArt.load(track.image) { transformations(RoundedCornersTransformation(10f)) }
+            ivAlbumArt.load(track.image) { transformations(RoundedCornersTransformation(10f)) }
+            
+            if (isActuallyPlaying) {
                 btnPlay.setImageResource(android.R.drawable.ic_media_pause)
                 root.strokeWidth = 2
                 root.strokeColor = android.graphics.Color.parseColor("#7C6FFF")
             } else {
-                ivAlbumArt.load(track.image) { transformations(RoundedCornersTransformation(10f)) }
                 btnPlay.setImageResource(android.R.drawable.ic_media_play)
-                root.strokeWidth = 0
+                // Eğer bu şarkı seçili ama duraklatılmışsa çerçeve kalsın ama play ikonu görünsün
+                root.strokeWidth = if (isThisTrack) 2 else 0
+                root.strokeColor = if (isThisTrack) android.graphics.Color.parseColor("#444466") else 0
             }
         }
     }
