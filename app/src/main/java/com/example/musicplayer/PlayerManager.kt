@@ -26,7 +26,10 @@ object PlayerManager {
 
     private var controller: MediaController? = null
     
-    // URL Çözücü: Herhangi bir track için URL bulabilmeli
+    // URL Önbelleği (VideoId -> StreamUrl)
+    private val urlCache = mutableMapOf<String, String>()
+
+    // URL Çözücü
     var urlResolver: ((Track, (String) -> Unit) -> Unit)? = null
 
     private var retryCount = 0
@@ -58,6 +61,10 @@ object PlayerManager {
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 notifyListeners(isPlaying)
+                // Şarkı çalmaya başladığında bir sonrakini önceden çöz (Pre-fetch)
+                if (isPlaying) {
+                    prefetchNextTrack()
+                }
             }
 
             override fun onPlayerError(error: PlaybackException) {
@@ -68,6 +75,8 @@ object PlayerManager {
                 if (isSourceError && retryCount < MAX_RETRY) {
                     retryCount++
                     val track = currentQueue.getOrNull(currentIndex) ?: return
+                    // Hata durumunda cache'i temizle ve tekrar dene
+                    urlCache.remove(track.id)
                     mainHandler.postDelayed({ resolveAndPlay(track) }, 500)
                 } else {
                     retryCount = 0
@@ -109,39 +118,66 @@ object PlayerManager {
     fun playNext() {
         if (currentQueue.isEmpty()) return
         retryCount = 0
-        val nextIndex = when (playMode) {
-            PlayMode.SEQUENTIAL -> if (currentIndex + 1 < currentQueue.size) currentIndex + 1 else 0
-            PlayMode.SHUFFLE -> {
-                val pos = shuffledIndices.indexOf(currentIndex)
-                shuffledIndices[(pos + 1) % shuffledIndices.size]
-            }
-        }
-        currentIndex = nextIndex
+        currentIndex = getNextIndex()
         resolveAndPlay(currentQueue[currentIndex])
     }
 
     fun playPrev() {
         if (currentQueue.isEmpty()) return
         retryCount = 0
-        val prevIndex = when (playMode) {
+        currentIndex = getPrevIndex()
+        resolveAndPlay(currentQueue[currentIndex])
+    }
+
+    private fun getNextIndex(): Int {
+        return when (playMode) {
+            PlayMode.SEQUENTIAL -> if (currentIndex + 1 < currentQueue.size) currentIndex + 1 else 0
+            PlayMode.SHUFFLE -> {
+                val pos = shuffledIndices.indexOf(currentIndex)
+                shuffledIndices[(pos + 1) % shuffledIndices.size]
+            }
+        }
+    }
+
+    private fun getPrevIndex(): Int {
+        return when (playMode) {
             PlayMode.SEQUENTIAL -> if (currentIndex - 1 >= 0) currentIndex - 1 else currentQueue.size - 1
             PlayMode.SHUFFLE -> {
                 val pos = shuffledIndices.indexOf(currentIndex)
                 shuffledIndices[if (pos - 1 >= 0) pos - 1 else shuffledIndices.size - 1]
             }
         }
-        currentIndex = prevIndex
-        resolveAndPlay(currentQueue[currentIndex])
+    }
+
+    private fun prefetchNextTrack() {
+        val nextIdx = getNextIndex()
+        if (nextIdx != currentIndex) {
+            val nextTrack = currentQueue[nextIdx]
+            // Eğer URL zaten cache'de yoksa ve uzak bir dosyaysa çöz
+            if (!urlCache.containsKey(nextTrack.id) && (nextTrack.audio.isEmpty() || nextTrack.audio.startsWith("http"))) {
+                urlResolver?.invoke(nextTrack) { url ->
+                    urlCache[nextTrack.id] = url
+                }
+            }
+        }
     }
 
     private fun resolveAndPlay(track: Track) {
-        // Eğer yerel dosya yolu varsa direkt çal
+        // 1. Yerel dosya varsa direkt çal
         if (track.audio.isNotEmpty() && !track.audio.startsWith("http")) {
             play(track, track.audio)
             return
         }
 
+        // 2. Önbellekte (cache) varsa direkt çal
+        urlCache[track.id]?.let { cachedUrl ->
+            play(track, cachedUrl)
+            return
+        }
+
+        // 3. Hiçbiri yoksa çözücüye sor
         urlResolver?.invoke(track) { url -> 
+            urlCache[track.id] = url
             play(track, url)
         }
     }
