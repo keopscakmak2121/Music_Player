@@ -6,7 +6,7 @@
     android:layout_height="wrap_content"
     android:layout_marginStart="14dp"
     android:layout_marginEnd="14dp"
-    android:layout_marginBottom="6dp"
+    android:layout_marginBottom="8dp"
     android:foreground="?attr/selectableItemBackground"
     app:cardBackgroundColor="@color/bg_card"
     app:cardCornerRadius="16dp"
@@ -16,11 +16,10 @@
 
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
-        android:layout_height="64dp"
-        android:paddingStart="12dp"
-        android:paddingEnd="4dp">
+        android:layout_height="72dp"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp">
 
-        <!-- Seçim checkbox -->
         <CheckBox
             android:id="@+id/checkBox"
             android:layout_width="32dp"
@@ -31,29 +30,27 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent" />
 
-        <!-- Tür ikonu (Play tuşu olmayan sade bir ikon) -->
-        <ImageView
+        <!-- MODERNEŞTİRME: Daha büyük ve köşeli resim alanı -->
+        <com.google.android.material.imageview.ShapeableImageView
             android:id="@+id/ivMusicIcon"
-            android:layout_width="38dp"
-            android:layout_height="38dp"
-            android:src="@android:drawable/ic_menu_sort_alphabetically"
-            android:tint="@color/accent"
-            android:padding="8dp"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:scaleType="centerCrop"
+            app:shapeAppearanceOverlay="@style/RoundedSquare"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintStart_toEndOf="@+id/checkBox"
             app:layout_constraintTop_toTopOf="parent" />
 
-        <!-- Dosya adı -->
         <TextView
             android:id="@+id/tvFileName"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginStart="10dp"
+            android:layout_marginStart="14dp"
             android:layout_marginEnd="8dp"
             android:ellipsize="end"
             android:maxLines="1"
             android:textColor="@color/text_primary"
-            android:textSize="13sp"
+            android:textSize="15sp"
             android:textStyle="bold"
             app:layout_constraintBottom_toTopOf="@+id/tvFileSize"
             app:layout_constraintEnd_toStartOf="@+id/btnDelete"
@@ -61,27 +58,25 @@
             app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintVertical_chainStyle="packed" />
 
-        <!-- Dosya boyutu -->
         <TextView
             android:id="@+id/tvFileSize"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginTop="3dp"
-            android:textColor="@color/text_hint"
-            android:textSize="11sp"
+            android:layout_marginTop="4dp"
+            android:textColor="@color/text_secondary"
+            android:textSize="12sp"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toStartOf="@+id/btnDelete"
             app:layout_constraintStart_toStartOf="@+id/tvFileName"
             app:layout_constraintTop_toBottomOf="@+id/tvFileName" />
 
-        <!-- Sil butonu -->
         <ImageButton
             android:id="@+id/btnDelete"
-            android:layout_width="44dp"
-            android:layout_height="44dp"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:src="@android:drawable/ic_menu_delete"
-            android:tint="@color/error"
+            app:tint="@color/text_hint"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintTop_toTopOf="parent" />

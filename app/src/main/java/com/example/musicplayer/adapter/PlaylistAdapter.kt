@@ -6,6 +6,8 @@ import android.view.ViewGroup
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
+import coil.load
+import coil.transform.RoundedCornersTransformation
 import com.example.musicplayer.databinding.ItemPlaylistBinding
 import com.example.musicplayer.db.AppDatabase
 import com.example.musicplayer.db.PlaylistEntity
@@ -51,13 +53,26 @@ class PlaylistAdapter(
             }
         }
 
-        // Şarkı sayısını ViewHolder içinde canlı olarak dinle
+        // MODERNEŞTİRME: Şarkı sayısı ve İLK ŞARKI RESMİNİ yükle
         holder.job?.cancel()
         holder.job = scope.launch {
             val db = AppDatabase.getInstance(holder.itemView.context)
             db.playlistSongDao().getSongsInPlaylist(playlist.id).collectLatest { songs ->
                 withContext(Dispatchers.Main) {
                     holder.binding.tvSongCount.text = "${songs.size} şarkı"
+                    
+                    // İlk şarkının resmini yükle
+                    if (songs.isNotEmpty()) {
+                        val firstSong = songs[0]
+                        holder.binding.ivPlaylistCover.load(firstSong.thumbnail.ifEmpty { firstSong.videoId }) {
+                            crossfade(true)
+                            placeholder(android.R.drawable.ic_menu_gallery)
+                            error(android.R.drawable.ic_menu_gallery)
+                            transformations(RoundedCornersTransformation(14f))
+                        }
+                    } else {
+                        holder.binding.ivPlaylistCover.setImageResource(android.R.drawable.ic_menu_gallery)
+                    }
                 }
             }
         }

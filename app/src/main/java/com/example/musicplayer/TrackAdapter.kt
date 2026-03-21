@@ -33,11 +33,7 @@ class TrackAdapter(
     var selectionMode = false
         private set
 
-    private fun fakeIdForPosition(position: Int): Long? =
-        downloadMap.entries.firstOrNull { it.value == position }?.key
-
     inner class TrackViewHolder(val binding: ItemTrackBinding) : RecyclerView.ViewHolder(binding.root)
-    inner class LoadingViewHolder(view: View) : RecyclerView.ViewHolder(view)
 
     override fun getItemViewType(position: Int): Int =
         if (isLoadingMore && position == tracks.size) TYPE_LOADING else TYPE_TRACK
@@ -48,100 +44,66 @@ class TrackAdapter(
         return if (viewType == TYPE_LOADING) {
             val pb = android.widget.ProgressBar(parent.context).apply {
                 layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 80)
-                isIndeterminate = true
             }
-            LoadingViewHolder(pb)
+            object : RecyclerView.ViewHolder(pb) {}
         } else {
             TrackViewHolder(ItemTrackBinding.inflate(LayoutInflater.from(parent.context), parent, false))
         }
     }
 
-    override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int, payloads: List<Any>) {
-        if (holder is LoadingViewHolder) return
-        if (payloads.isEmpty()) { onBindViewHolder(holder, position); return }
-        val tvHolder = holder as TrackViewHolder
-        payloads.forEach { payload ->
-            when (payload) {
-                PAYLOAD_PROGRESS -> bindDownloadState(tvHolder.binding, position, tracks[position])
-                PAYLOAD_PLAYING  -> bindPlayingState(tvHolder.binding, position, tracks[position])
-            }
-        }
-    }
-
     override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
-        if (holder is LoadingViewHolder) return
-        val tvHolder = holder as TrackViewHolder
+        if (holder !is TrackViewHolder) return
         val track = tracks[position]
         val isSelected = selectedPositions.contains(position)
         
-        tvHolder.binding.apply {
+        holder.binding.apply {
             tvTrackName.text  = track.name
             tvArtistName.text = track.artistName
             tvDuration.text   = formatDuration(track.duration)
 
+            ivAlbumArt.load(track.image.ifEmpty { "https://via.placeholder.com/150" }) {
+                crossfade(true)
+                transformations(RoundedCornersTransformation(14f))
+            }
+
             checkBox.visibility = if (selectionMode) View.VISIBLE else View.GONE
             checkBox.isChecked = isSelected
-            checkBox.setOnClickListener { toggleSelection(position) }
-
+            
             root.setCardBackgroundColor(
-                if (isSelected) android.graphics.Color.parseColor("#1E1545")
+                if (isSelected) android.graphics.Color.parseColor("#2A1E4A")
                 else android.graphics.Color.parseColor("#13131F")
             )
+            root.strokeWidth = if (isSelected || position == playingPosition) 3 else 0
+            root.strokeColor = android.graphics.Color.parseColor("#7C6FFF")
 
             root.setOnClickListener {
                 if (selectionMode) toggleSelection(position)
+                else onPlayClick(track, position)
             }
 
             root.setOnLongClickListener {
-                if (!selectionMode) {
-                    enterSelectionMode()
-                    toggleSelection(position)
-                }
+                if (!selectionMode) { enterSelectionMode(); toggleSelection(position) }
                 true
-            }
-
-            btnPlay.setOnClickListener {
-                if (selectionMode) return@setOnClickListener
-                onPlayClick(track, position)
             }
 
             btnDownload.setOnClickListener {
                 if (selectionMode) return@setOnClickListener
-                val state = progressMap[position]
-                when {
-                    state != null && state >= -2 && state != -1 -> {
-                        val fakeId = fakeIdForPosition(position)
-                        if (fakeId != null) onCancelDownload?.invoke(fakeId)
-                    }
-                    state == -1 -> { }
-                    else -> onDownloadClick(track, position)
-                }
+                onDownloadClick(track, position)
             }
         }
-        bindPlayingState(tvHolder.binding, position, track)
-        bindDownloadState(tvHolder.binding, position, track)
+        bindPlayingState(holder.binding, position)
+        bindDownloadState(holder.binding, position)
     }
 
-    private fun bindPlayingState(binding: ItemTrackBinding, position: Int, track: Track) {
-        val isThisTrack = position == playingPosition
-        val isActuallyPlaying = isThisTrack && PlayerManager.isPlaying()
-
-        binding.apply {
-            ivAlbumArt.load(track.image) { transformations(RoundedCornersTransformation(10f)) }
-            
-            if (isActuallyPlaying) {
-                btnPlay.setImageResource(android.R.drawable.ic_media_pause)
-                root.strokeWidth = 2
-                root.strokeColor = android.graphics.Color.parseColor("#7C6FFF")
-            } else {
-                btnPlay.setImageResource(android.R.drawable.ic_media_play)
-                root.strokeWidth = if (isThisTrack) 2 else 0
-                root.strokeColor = if (isThisTrack) android.graphics.Color.parseColor("#444466") else 0
-            }
-        }
+    private fun bindPlayingState(binding: ItemTrackBinding, position: Int) {
+        val isPlaying = position == playingPosition && PlayerManager.isPlaying()
+        binding.btnPlay.setImageResource(
+            if (isPlaying) android.R.drawable.ic_media_pause 
+            else android.R.drawable.ic_media_play
+        )
     }
 
-    private fun bindDownloadState(binding: ItemTrackBinding, position: Int, track: Track) {
+    private fun bindDownloadState(binding: ItemTrackBinding, position: Int) {
         val progress = progressMap[position]
         binding.apply {
             when {
@@ -152,7 +114,7 @@ class TrackAdapter(
                     btnDownload.isEnabled = true
                     btnPlay.isEnabled = true
                 }
-                progress == -3 -> { // Çalma için Hazırlanıyor durumu
+                progress == -3 -> { // Hazırlanıyor... (Play'e basınca)
                     downloadProgress.visibility = View.VISIBLE
                     downloadProgress.isIndeterminate = true
                     tvDownloadPercent.visibility = View.VISIBLE
@@ -160,14 +122,14 @@ class TrackAdapter(
                     btnDownload.isEnabled = false
                     btnPlay.isEnabled = false
                 }
-                progress == -2 -> {
+                progress == -2 -> { // Bekliyor... (İndirmeye basınca)
                     downloadProgress.visibility = View.VISIBLE
                     downloadProgress.isIndeterminate = true
                     tvDownloadPercent.visibility = View.VISIBLE
                     tvDownloadPercent.text = "Bekliyor..."
-                    btnPlay.isEnabled = true
+                    btnDownload.isEnabled = true 
                 }
-                progress == -1 -> {
+                progress == -1 -> { // İndirildi
                     downloadProgress.visibility = View.GONE
                     tvDownloadPercent.visibility = View.VISIBLE
                     tvDownloadPercent.text = "✓ İndirildi"
@@ -175,31 +137,19 @@ class TrackAdapter(
                     btnDownload.isEnabled = false
                     btnPlay.isEnabled = true
                 }
-                else -> {
+                else -> { // İndiriliyor %...
                     downloadProgress.visibility = View.VISIBLE
                     downloadProgress.isIndeterminate = false
                     downloadProgress.progress = progress
                     tvDownloadPercent.visibility = View.VISIBLE
                     tvDownloadPercent.text = "%$progress"
-                    btnPlay.isEnabled = true
+                    btnDownload.isEnabled = true
                 }
             }
         }
     }
 
-    fun enterSelectionMode() {
-        selectionMode = true
-        notifyDataSetChanged()
-        onSelectionChanged?.invoke(0)
-    }
-
-    fun exitSelectionMode() {
-        selectionMode = false
-        selectedPositions.clear()
-        notifyDataSetChanged()
-        onSelectionChanged?.invoke(-1)
-    }
-
+    // --- Selection and Helper Methods ---
     private fun toggleSelection(position: Int) {
         if (selectedPositions.contains(position)) selectedPositions.remove(position)
         else selectedPositions.add(position)
@@ -208,82 +158,31 @@ class TrackAdapter(
         if (selectedPositions.isEmpty() && selectionMode) exitSelectionMode()
     }
 
-    fun selectAll() {
-        tracks.indices.forEach { selectedPositions.add(it) }
-        notifyDataSetChanged()
-        onSelectionChanged?.invoke(selectedPositions.size)
-    }
-
+    fun enterSelectionMode() { selectionMode = true; notifyDataSetChanged(); onSelectionChanged?.invoke(0) }
+    fun exitSelectionMode() { selectionMode = false; selectedPositions.clear(); notifyDataSetChanged(); onSelectionChanged?.invoke(-1) }
+    fun selectAll() { tracks.indices.forEach { selectedPositions.add(it) }; notifyDataSetChanged(); onSelectionChanged?.invoke(selectedPositions.size) }
     fun getSelectedTracks(): List<Track> = selectedPositions.sorted().mapNotNull { tracks.getOrNull(it) }
-
-    fun setLoadingMore(loading: Boolean) {
-        isLoadingMore = loading
-        notifyDataSetChanged()
-    }
+    fun setLoadingMore(loading: Boolean) { isLoadingMore = loading; notifyDataSetChanged() }
 
     fun setPlayingPosition(position: Int) {
         val old = playingPosition
         playingPosition = position
-        if (old >= 0) notifyItemChanged(old, PAYLOAD_PLAYING)
-        if (position >= 0) notifyItemChanged(position, PAYLOAD_PLAYING)
+        if (old >= 0) notifyItemChanged(old)
+        if (position >= 0) notifyItemChanged(position)
     }
 
-    fun notifyPlayingStateChanged() {
-        if (playingPosition >= 0) {
-            notifyItemChanged(playingPosition, PAYLOAD_PLAYING)
-        }
-    }
-
-    fun registerLoading(position: Int) {
-        progressMap[position] = -3
-        notifyItemChanged(position, PAYLOAD_PROGRESS)
-    }
-
-    fun clearLoading(position: Int) {
-        if (progressMap[position] == -3) {
-            progressMap.remove(position)
-            notifyItemChanged(position, PAYLOAD_PROGRESS)
-        }
-    }
-
-    fun registerPreparing(position: Int) {
-        progressMap[position] = -2
-        notifyItemChanged(position, PAYLOAD_PROGRESS)
-    }
-
-    fun registerDownload(fakeId: Long, position: Int) {
-        downloadMap[fakeId] = position
-        progressMap[position] = 0
-        notifyItemChanged(position, PAYLOAD_PROGRESS)
-    }
-
-    fun updateProgress(fakeId: Long, percent: Int) {
-        val position = downloadMap[fakeId] ?: return
-        progressMap[position] = percent
-        notifyItemChanged(position, PAYLOAD_PROGRESS)
-    }
-
-    fun markCompleted(fakeId: Long) {
-        val position = downloadMap[fakeId] ?: return
-        progressMap[position] = -1
-        downloadMap.remove(fakeId)
-        notifyItemChanged(position, PAYLOAD_PROGRESS)
-    }
-
-    fun markCompletedByPosition(position: Int) {
-        progressMap[position] = -1
-        notifyItemChanged(position, PAYLOAD_PROGRESS)
-    }
-
-    fun positionForFakeId(fakeId: Long): Int? = downloadMap[fakeId]
+    fun notifyPlayingStateChanged() { if (playingPosition >= 0) notifyItemChanged(playingPosition) }
+    
+    fun registerLoading(position: Int) { progressMap[position] = -3; notifyItemChanged(position) }
+    fun clearLoading(position: Int) { if (progressMap[position] == -3) progressMap.remove(position); notifyItemChanged(position) }
+    fun registerPreparing(position: Int) { progressMap[position] = -2; notifyItemChanged(position) }
+    fun registerDownload(fakeId: Long, position: Int) { downloadMap[fakeId] = position; progressMap[position] = 0; notifyItemChanged(position) }
+    fun updateProgress(fakeId: Long, percent: Int) { val pos = downloadMap[fakeId] ?: return; progressMap[pos] = percent; notifyItemChanged(pos) }
+    fun markCompleted(fakeId: Long) { val pos = downloadMap[fakeId] ?: return; progressMap[pos] = -1; notifyItemChanged(pos) }
+    fun markCompletedByPosition(position: Int) { progressMap[position] = -1; notifyItemChanged(position) }
     fun isDownloaded(position: Int): Boolean = progressMap[position] == -1
-    fun cancelDownload(position: Int) {
-        progressMap.remove(position)
-        notifyItemChanged(position, PAYLOAD_PROGRESS)
-    }
+    fun cancelDownload(position: Int) { progressMap.remove(position); notifyItemChanged(position) }
+    fun positionForFakeId(fakeId: Long) = downloadMap[fakeId]
 
-    private fun formatDuration(seconds: Int): String {
-        val m = seconds / 60; val s = seconds % 60
-        return "%d:%02d".format(m, s)
-    }
+    private fun formatDuration(seconds: Int): String = "%d:%02d".format(seconds / 60, seconds % 60)
 }

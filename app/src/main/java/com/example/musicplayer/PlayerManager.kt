@@ -26,7 +26,7 @@ object PlayerManager {
 
     private var controller: MediaController? = null
     
-    // URL Önbelleği (VideoId -> StreamUrl)
+    // URL Önbelleği
     private val urlCache = mutableMapOf<String, String>()
 
     // URL Çözücü
@@ -61,7 +61,6 @@ object PlayerManager {
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 notifyListeners(isPlaying)
-                // Şarkı çalmaya başladığında bir sonrakini önceden çöz (Pre-fetch)
                 if (isPlaying) {
                     prefetchNextTrack()
                 }
@@ -75,7 +74,6 @@ object PlayerManager {
                 if (isSourceError && retryCount < MAX_RETRY) {
                     retryCount++
                     val track = currentQueue.getOrNull(currentIndex) ?: return
-                    // Hata durumunda cache'i temizle ve tekrar dene
                     urlCache.remove(track.id)
                     mainHandler.postDelayed({ resolveAndPlay(track) }, 500)
                 } else {
@@ -103,6 +101,7 @@ object PlayerManager {
     }
 
     fun playQueue(tracks: List<Track>, startIndex: Int) {
+        if (tracks.isEmpty()) return
         currentQueue = tracks
         currentIndex = startIndex
         retryCount = 0
@@ -130,30 +129,34 @@ object PlayerManager {
     }
 
     private fun getNextIndex(): Int {
+        if (currentQueue.isEmpty()) return -1
         return when (playMode) {
             PlayMode.SEQUENTIAL -> if (currentIndex + 1 < currentQueue.size) currentIndex + 1 else 0
             PlayMode.SHUFFLE -> {
                 val pos = shuffledIndices.indexOf(currentIndex)
-                shuffledIndices[(pos + 1) % shuffledIndices.size]
+                if (pos == -1) 0 else shuffledIndices[(pos + 1) % shuffledIndices.size]
             }
         }
     }
 
     private fun getPrevIndex(): Int {
+        if (currentQueue.isEmpty()) return -1
         return when (playMode) {
             PlayMode.SEQUENTIAL -> if (currentIndex - 1 >= 0) currentIndex - 1 else currentQueue.size - 1
             PlayMode.SHUFFLE -> {
                 val pos = shuffledIndices.indexOf(currentIndex)
-                shuffledIndices[if (pos - 1 >= 0) pos - 1 else shuffledIndices.size - 1]
+                if (pos == -1) 0 else shuffledIndices[if (pos - 1 >= 0) pos - 1 else shuffledIndices.size - 1]
             }
         }
     }
 
     private fun prefetchNextTrack() {
+        if (currentQueue.isEmpty() || currentIndex == -1) return
+        
         val nextIdx = getNextIndex()
-        if (nextIdx != currentIndex) {
+        // Eğer geçerli bir sonraki indeks varsa ve şu anki şarkıdan farklıysa
+        if (nextIdx != -1 && nextIdx != currentIndex && nextIdx < currentQueue.size) {
             val nextTrack = currentQueue[nextIdx]
-            // Eğer URL zaten cache'de yoksa ve uzak bir dosyaysa çöz
             if (!urlCache.containsKey(nextTrack.id) && (nextTrack.audio.isEmpty() || nextTrack.audio.startsWith("http"))) {
                 urlResolver?.invoke(nextTrack) { url ->
                     urlCache[nextTrack.id] = url
@@ -163,19 +166,16 @@ object PlayerManager {
     }
 
     private fun resolveAndPlay(track: Track) {
-        // 1. Yerel dosya varsa direkt çal
         if (track.audio.isNotEmpty() && !track.audio.startsWith("http")) {
             play(track, track.audio)
             return
         }
 
-        // 2. Önbellekte (cache) varsa direkt çal
         urlCache[track.id]?.let { cachedUrl ->
             play(track, cachedUrl)
             return
         }
 
-        // 3. Hiçbiri yoksa çözücüye sor
         urlResolver?.invoke(track) { url -> 
             urlCache[track.id] = url
             play(track, url)

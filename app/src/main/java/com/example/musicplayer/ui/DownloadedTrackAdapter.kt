@@ -1,11 +1,13 @@
 package com.example.musicplayer.ui
 
 import android.graphics.Color
-import android.graphics.PorterDuff
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.recyclerview.widget.RecyclerView
+import coil.load
+import coil.transform.RoundedCornersTransformation
+import com.example.musicplayer.R
 import com.example.musicplayer.databinding.ItemDownloadedTrackBinding
 
 class DownloadedTrackAdapter(
@@ -30,44 +32,39 @@ class DownloadedTrackAdapter(
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         val file = files[position]
         val isSelected = selectedPositions.contains(position)
+        
         holder.binding.apply {
-
             tvFileName.text = file.name
             tvFileSize.text = formatSize(file.size)
 
-            val iconTint = if (file.isVideo) Color.parseColor("#C961FF") else Color.parseColor("#7C6FFF")
-            ivMusicIcon.setColorFilter(iconTint, PorterDuff.Mode.SRC_IN)
-            
-            // Sessiz mod yerine Play veya Video ikonu (Daha mantıklı)
-            ivMusicIcon.setImageResource(
-                if (file.isVideo) android.R.drawable.ic_media_ff
-                else android.R.drawable.ic_media_play
-            )
+            // MODERLEŞTİRME: Dosyadan kapak resmi çekme (Coil MediaStore desteği)
+            ivMusicIcon.load(file.uri) {
+                crossfade(true)
+                // Hata düzeltildi: Standart Android ikonları kullanıldı
+                placeholder(if (file.isVideo) android.R.drawable.presence_video_online else android.R.drawable.ic_menu_gallery)
+                error(if (file.isVideo) android.R.drawable.presence_video_online else android.R.drawable.ic_menu_gallery)
+                transformations(RoundedCornersTransformation(16f))
+            }
 
+            // Tasarım güncellemeleri
             root.setCardBackgroundColor(
                 if (isSelected) Color.parseColor("#2A1E4A")
                 else Color.parseColor("#13131F")
             )
-            root.strokeWidth = if (isSelected) 2 else 1
-            root.strokeColor = if (isSelected) Color.parseColor("#7C6FFF") else Color.parseColor("#2A2A45")
+            root.strokeWidth = if (isSelected) 3 else 0
+            root.strokeColor = Color.parseColor("#7C6FFF")
 
             checkBox.visibility = if (selectionMode) View.VISIBLE else View.GONE
             checkBox.isChecked = isSelected
             btnDelete.visibility = if (selectionMode) View.GONE else View.VISIBLE
 
             root.setOnClickListener {
-                if (selectionMode) {
-                    toggleSelection(position)
-                } else {
-                    onPlayClick(file)
-                }
+                if (selectionMode) toggleSelection(position)
+                else onPlayClick(file)
             }
             
             checkBox.setOnClickListener { toggleSelection(position) }
-
-            btnDelete.setOnClickListener {
-                onDeleteClick(file, holder.adapterPosition)
-            }
+            btnDelete.setOnClickListener { onDeleteClick(file, holder.adapterPosition) }
 
             root.setOnLongClickListener {
                 if (!selectionMode) {
