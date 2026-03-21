@@ -150,12 +150,22 @@ class TrackAdapter(
                     tvDownloadPercent.visibility = View.GONE
                     btnDownload.setImageResource(android.R.drawable.ic_menu_save)
                     btnDownload.isEnabled = true
+                    btnPlay.isEnabled = true
+                }
+                progress == -3 -> { // Çalma için Hazırlanıyor durumu
+                    downloadProgress.visibility = View.VISIBLE
+                    downloadProgress.isIndeterminate = true
+                    tvDownloadPercent.visibility = View.VISIBLE
+                    tvDownloadPercent.text = "Hazırlanıyor..."
+                    btnDownload.isEnabled = false
+                    btnPlay.isEnabled = false
                 }
                 progress == -2 -> {
                     downloadProgress.visibility = View.VISIBLE
                     downloadProgress.isIndeterminate = true
                     tvDownloadPercent.visibility = View.VISIBLE
                     tvDownloadPercent.text = "Bekliyor..."
+                    btnPlay.isEnabled = true
                 }
                 progress == -1 -> {
                     downloadProgress.visibility = View.GONE
@@ -163,6 +173,7 @@ class TrackAdapter(
                     tvDownloadPercent.text = "✓ İndirildi"
                     btnDownload.setImageResource(android.R.drawable.checkbox_on_background)
                     btnDownload.isEnabled = false
+                    btnPlay.isEnabled = true
                 }
                 else -> {
                     downloadProgress.visibility = View.VISIBLE
@@ -170,6 +181,7 @@ class TrackAdapter(
                     downloadProgress.progress = progress
                     tvDownloadPercent.visibility = View.VISIBLE
                     tvDownloadPercent.text = "%$progress"
+                    btnPlay.isEnabled = true
                 }
             }
         }
@@ -219,6 +231,18 @@ class TrackAdapter(
     fun notifyPlayingStateChanged() {
         if (playingPosition >= 0) {
             notifyItemChanged(playingPosition, PAYLOAD_PLAYING)
+        }
+    }
+
+    fun registerLoading(position: Int) {
+        progressMap[position] = -3
+        notifyItemChanged(position, PAYLOAD_PROGRESS)
+    }
+
+    fun clearLoading(position: Int) {
+        if (progressMap[position] == -3) {
+            progressMap.remove(position)
+            notifyItemChanged(position, PAYLOAD_PROGRESS)
         }
     }
 

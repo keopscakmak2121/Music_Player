@@ -117,6 +117,20 @@ class DiscoverFragment : Fragment() {
             }
         })
 
+        // PlayerManager'a dinamik URL çözücü ata
+        PlayerManager.urlResolver = { track, callback ->
+            // Önce yerel dosyaya bak
+            val localUri = findLocalUri(track)
+            if (localUri != null) {
+                callback(localUri)
+            } else {
+                // Yoksa API'den çek
+                resolveAndPlay(track) { url ->
+                    callback(url)
+                }
+            }
+        }
+
         PlayerManager.addPlaybackStateListener(playbackStateListener)
     }
 
@@ -246,7 +260,6 @@ class DiscoverFragment : Fragment() {
         downloadClient = OkHttpClient.Builder()
             .connectTimeout(5, TimeUnit.SECONDS)
             .readTimeout(10, TimeUnit.MINUTES)
-            .writeTimeout(10, TimeUnit.MINUTES)
             .build()
     }
 
@@ -313,14 +326,8 @@ class DiscoverFragment : Fragment() {
                             if (track.id == currentPlayingId) {
                                 PlayerManager.togglePlayPause()
                             } else {
-                                val localUri = findLocalUri(track)
-                                if (localUri != null) {
-                                    play(track, localUri, pos)
-                                } else {
-                                    resolveAndPlay(track) { onlineUrl ->
-                                        play(track, onlineUrl, pos)
-                                    }
-                                }
+                                // Çalma kuyruğunu kur
+                                PlayerManager.playQueue(currentTracks.toList(), pos)
                             }
                         },
                         onLongClick = { track -> /* Seçim modu tetiklenir */ },
@@ -357,12 +364,6 @@ class DiscoverFragment : Fragment() {
                 trackAdapter?.setLoadingMore(false)
             }
         })
-    }
-
-    private fun play(track: Track, url: String, position: Int) {
-        PlayerManager.urlResolver = { t, cb -> cb(url) }
-        PlayerManager.playQueue(currentTracks.toList(), position)
-        trackAdapter?.setPlayingPosition(position)
     }
 
     private fun showDownloadOptions(track: Track, position: Int) {
@@ -507,11 +508,20 @@ class DiscoverFragment : Fragment() {
     }
 
     private fun resolveAndPlay(track: Track, callback: ((String) -> Unit)? = null) {
+        val position = currentTracks.indexOfFirst { it.id == track.id }
+        if (position >= 0) {
+            trackAdapter?.registerLoading(position)
+        }
+
         youtubeApi.getVideoInfo(track.id).enqueue(object : Callback<InvidiousVideoInfo> {
             override fun onResponse(call: Call<InvidiousVideoInfo>, response: Response<InvidiousVideoInfo>) {
+                if (position >= 0) trackAdapter?.clearLoading(position)
                 response.body()?.url?.let { callback?.invoke(it) }
             }
-            override fun onFailure(call: Call<InvidiousVideoInfo>, t: Throwable) {}
+            override fun onFailure(call: Call<InvidiousVideoInfo>, t: Throwable) {
+                if (position >= 0) trackAdapter?.clearLoading(position)
+                Toast.makeText(context, "Bağlantı hatası", Toast.LENGTH_SHORT).show()
+            }
         })
     }
 

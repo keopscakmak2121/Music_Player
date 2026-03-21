@@ -25,13 +25,14 @@ object PlayerManager {
     private var shuffledIndices: List<Int> = emptyList()
 
     private var controller: MediaController? = null
+    
+    // URL Çözücü: Herhangi bir track için URL bulabilmeli
     var urlResolver: ((Track, (String) -> Unit) -> Unit)? = null
 
     private var retryCount = 0
     private const val MAX_RETRY = 1
     private val mainHandler = Handler(Looper.getMainLooper())
 
-    // Çoklu dinleyici desteği
     private val playbackStateListeners = mutableListOf<(Boolean) -> Unit>()
 
     fun addPlaybackStateListener(listener: (Boolean) -> Unit) {
@@ -134,7 +135,15 @@ object PlayerManager {
     }
 
     private fun resolveAndPlay(track: Track) {
-        urlResolver?.invoke(track) { url -> play(track, url) }
+        // Eğer yerel dosya yolu varsa direkt çal
+        if (track.audio.isNotEmpty() && !track.audio.startsWith("http")) {
+            play(track, track.audio)
+            return
+        }
+
+        urlResolver?.invoke(track) { url -> 
+            play(track, url)
+        }
     }
 
     private fun play(track: Track, url: String) {
