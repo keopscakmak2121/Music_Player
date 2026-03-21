@@ -27,10 +27,22 @@ object PlayerManager {
     private var controller: MediaController? = null
     var urlResolver: ((Track, (String) -> Unit) -> Unit)? = null
 
-    // Expire olan URL için taze çekip tekrar dene
     private var retryCount = 0
     private const val MAX_RETRY = 1
     private val mainHandler = Handler(Looper.getMainLooper())
+
+    // Çoklu dinleyici desteği
+    private val playbackStateListeners = mutableListOf<(Boolean) -> Unit>()
+
+    fun addPlaybackStateListener(listener: (Boolean) -> Unit) {
+        if (!playbackStateListeners.contains(listener)) {
+            playbackStateListeners.add(listener)
+        }
+    }
+
+    fun removePlaybackStateListener(listener: (Boolean) -> Unit) {
+        playbackStateListeners.remove(listener)
+    }
 
     fun attach(controller: MediaController) {
         this.controller = controller
@@ -40,15 +52,14 @@ object PlayerManager {
                     retryCount = 0
                     playNext()
                 }
-                onPlaybackStateChangedListener?.invoke(isPlaying())
+                notifyListeners(isPlaying())
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
-                onPlaybackStateChangedListener?.invoke(isPlaying)
+                notifyListeners(isPlaying)
             }
 
             override fun onPlayerError(error: PlaybackException) {
-                // IO/ağ hataları: expire olmuş URL veya geçici bağlantı sorunu
                 val isSourceError = error.errorCode in
                     PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS..
                     PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED
@@ -56,7 +67,6 @@ object PlayerManager {
                 if (isSourceError && retryCount < MAX_RETRY) {
                     retryCount++
                     val track = currentQueue.getOrNull(currentIndex) ?: return
-                    // Kısa gecikme sonrası URL'yi taze al ve tekrar başlat
                     mainHandler.postDelayed({ resolveAndPlay(track) }, 500)
                 } else {
                     retryCount = 0
@@ -66,26 +76,28 @@ object PlayerManager {
         })
     }
 
+    private fun notifyListeners(isPlaying: Boolean) {
+        mainHandler.post {
+            playbackStateListeners.forEach { it.invoke(isPlaying) }
+        }
+    }
+
     fun isPlaying(): Boolean = controller?.isPlaying ?: false
+    fun getDuration(): Long = controller?.duration ?: 0L
+    fun getCurrentPosition(): Long = controller?.currentPosition ?: 0L
+    fun seekTo(position: Long) { controller?.seekTo(position) }
 
     fun togglePlayPause() {
         val c = controller ?: return
-        if (c.isPlaying) {
-            c.pause()
-        } else {
-            c.play()
-        }
+        if (c.isPlaying) c.pause() else c.play()
     }
 
     fun playQueue(tracks: List<Track>, startIndex: Int) {
         currentQueue = tracks
         currentIndex = startIndex
         retryCount = 0
-        if (playMode == PlayMode.SHUFFLE) {
-            generateShuffledIndices()
-        }
-        val track = currentQueue[currentIndex]
-        resolveAndPlay(track)
+        if (playMode == PlayMode.SHUFFLE) generateShuffledIndices()
+        resolveAndPlay(currentQueue[currentIndex])
     }
 
     private fun generateShuffledIndices() {
@@ -97,52 +109,38 @@ object PlayerManager {
         if (currentQueue.isEmpty()) return
         retryCount = 0
         val nextIndex = when (playMode) {
-            PlayMode.SEQUENTIAL -> {
-                if (currentIndex + 1 < currentQueue.size) currentIndex + 1 else 0
-            }
+            PlayMode.SEQUENTIAL -> if (currentIndex + 1 < currentQueue.size) currentIndex + 1 else 0
             PlayMode.SHUFFLE -> {
                 val pos = shuffledIndices.indexOf(currentIndex)
-                val nextPos = (pos + 1) % shuffledIndices.size
-                shuffledIndices[nextPos]
+                shuffledIndices[(pos + 1) % shuffledIndices.size]
             }
         }
         currentIndex = nextIndex
-        val track = currentQueue[currentIndex]
-        resolveAndPlay(track)
+        resolveAndPlay(currentQueue[currentIndex])
     }
 
     fun playPrev() {
         if (currentQueue.isEmpty()) return
         retryCount = 0
         val prevIndex = when (playMode) {
-            PlayMode.SEQUENTIAL -> {
-                if (currentIndex - 1 >= 0) currentIndex - 1 else currentQueue.size - 1
-            }
+            PlayMode.SEQUENTIAL -> if (currentIndex - 1 >= 0) currentIndex - 1 else currentQueue.size - 1
             PlayMode.SHUFFLE -> {
                 val pos = shuffledIndices.indexOf(currentIndex)
-                val prevPos = if (pos - 1 >= 0) pos - 1 else shuffledIndices.size - 1
-                shuffledIndices[prevPos]
+                shuffledIndices[if (pos - 1 >= 0) pos - 1 else shuffledIndices.size - 1]
             }
         }
         currentIndex = prevIndex
-        val track = currentQueue[currentIndex]
-        resolveAndPlay(track)
+        resolveAndPlay(currentQueue[currentIndex])
     }
 
     private fun resolveAndPlay(track: Track) {
-        urlResolver?.invoke(track) { url ->
-            play(track, url)
-        }
+        urlResolver?.invoke(track) { url -> play(track, url) }
     }
 
     private fun play(track: Track, url: String) {
         val c = controller ?: return
-        // MediaController main thread'den çağrılmalı
         mainHandler.post {
-            val mediaItem = MediaItem.Builder()
-                .setUri(url)
-                .setMediaId(track.id)
-                .build()
+            val mediaItem = MediaItem.Builder().setUri(url).setMediaId(track.id).build()
             c.setMediaItem(mediaItem)
             c.prepare()
             c.play()
@@ -151,5 +149,4 @@ object PlayerManager {
     }
 
     var onTrackChanged: ((Track, Int) -> Unit)? = null
-    var onPlaybackStateChangedListener: ((Boolean) -> Unit)? = null
 }

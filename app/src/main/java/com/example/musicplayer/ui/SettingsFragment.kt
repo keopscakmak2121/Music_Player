@@ -29,12 +29,16 @@ class SettingsFragment : Fragment() {
             1 -> binding.rbLimit1.isChecked = true
             3 -> binding.rbLimit3.isChecked = true
             5 -> binding.rbLimit5.isChecked = true
+            10 -> binding.rbLimit10.isChecked = true
+            20 -> binding.rbLimit20.isChecked = true
         }
         binding.rgDownloadLimit.setOnCheckedChangeListener { _, checkedId ->
             val limit = when (checkedId) {
                 binding.rbLimit1.id -> 1
                 binding.rbLimit3.id -> 3
                 binding.rbLimit5.id -> 5
+                binding.rbLimit10.id -> 10
+                binding.rbLimit20.id -> 20
                 else -> 3
             }
             prefs.edit().putInt("download_limit", limit).apply()

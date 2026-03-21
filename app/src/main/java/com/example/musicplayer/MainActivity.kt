@@ -5,7 +5,10 @@ import android.content.ComponentName
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.View
+import android.widget.SeekBar
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -38,6 +41,22 @@ class MainActivity : AppCompatActivity() {
     private lateinit var settingsFragment: SettingsFragment
     private lateinit var playlistDetailFragment: PlaylistDetailFragment
 
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private var isUserSeeking = false
+
+    private val updateProgressRunnable = object : Runnable {
+        override fun run() {
+            if (!isUserSeeking && PlayerManager.isPlaying()) {
+                val duration = PlayerManager.getDuration()
+                if (duration > 0) {
+                    val pos = PlayerManager.getCurrentPosition()
+                    binding.miniPlayerSeekBar.progress = ((pos * 1000) / duration).toInt()
+                }
+            }
+            mainHandler.postDelayed(this, 1000)
+        }
+    }
+
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted: Boolean ->
@@ -57,6 +76,8 @@ class MainActivity : AppCompatActivity() {
         setupBottomNav()
         setupMiniPlayer()
         wireCallbacks()
+        
+        mainHandler.post(updateProgressRunnable)
     }
 
     private fun checkPermissions() {
@@ -99,7 +120,7 @@ class MainActivity : AppCompatActivity() {
                 R.id.nav_discover -> discoverFragment
                 R.id.nav_playlists -> playlistsFragment
                 R.id.nav_downloads -> {
-                    downloadsFragment.loadDownloadedFiles() // Sekmeye girince yenile
+                    downloadsFragment.loadDownloadedFiles()
                     downloadsFragment
                 }
                 R.id.nav_settings -> settingsFragment
@@ -125,6 +146,13 @@ class MainActivity : AppCompatActivity() {
                 discoverFragment.updatePlayingPosition(index)
                 playlistDetailFragment.updatePlayingPosition(index)
             }
+            PlayerManager.addPlaybackStateListener { isPlaying ->
+                runOnUiThread {
+                    binding.miniPlayerPlayPause.setImageResource(
+                        if (isPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play
+                    )
+                }
+            }
         }, MoreExecutors.directExecutor())
     }
 
@@ -138,6 +166,20 @@ class MainActivity : AppCompatActivity() {
         binding.miniPlayerNext.setOnClickListener {
             PlayerManager.playNext()
         }
+        
+        binding.miniPlayerSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                if (fromUser) {
+                    val duration = PlayerManager.getDuration()
+                    if (duration > 0) {
+                        val newPos = (progress.toLong() * duration) / 1000
+                        PlayerManager.seekTo(newPos)
+                    }
+                }
+            }
+            override fun onStartTrackingTouch(seekBar: SeekBar?) { isUserSeeking = true }
+            override fun onStopTrackingTouch(seekBar: SeekBar?) { isUserSeeking = false }
+        })
     }
 
     private fun wireCallbacks() {
@@ -145,7 +187,6 @@ class MainActivity : AppCompatActivity() {
 
         discoverFragment.onTrackSelected = playCallback
         
-        // Yeni: İndirme bittiğinde haber ver
         supportFragmentManager.setFragmentResultListener("download_complete", this) { _, _ ->
             downloadsFragment.loadDownloadedFiles()
         }
@@ -191,11 +232,13 @@ class MainActivity : AppCompatActivity() {
                     transformations(RoundedCornersTransformation(12f))
                 }
             }
+            binding.miniPlayerSeekBar.progress = 0
         }
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        mainHandler.removeCallbacks(updateProgressRunnable)
         controllerFuture?.let { MediaController.releaseFuture(it) }
     }
 }

@@ -70,6 +70,10 @@ class DiscoverFragment : Fragment() {
 
     var onTrackSelected: ((Track, String) -> Unit)? = null
 
+    private val playbackStateListener: (Boolean) -> Unit = { isPlaying ->
+        trackAdapter?.notifyPlayingStateChanged()
+    }
+
     companion object {
         private const val TAG = "MelodifySearch"
         const val BASE_URL = "http://77.92.154.224:5050/"
@@ -113,10 +117,7 @@ class DiscoverFragment : Fragment() {
             }
         })
 
-        // Çalma durumu değişince listeyi güncelle (Play/Pause ikonu için)
-        PlayerManager.onPlaybackStateChangedListener = { isPlaying ->
-            trackAdapter?.notifyDataSetChanged()
-        }
+        PlayerManager.addPlaybackStateListener(playbackStateListener)
     }
 
     override fun onResume() {
@@ -242,7 +243,11 @@ class DiscoverFragment : Fragment() {
     }
 
     private fun setupDownloadClient() {
-        downloadClient = OkHttpClient.Builder().connectTimeout(30, TimeUnit.SECONDS).readTimeout(10, TimeUnit.MINUTES).build()
+        downloadClient = OkHttpClient.Builder()
+            .connectTimeout(5, TimeUnit.SECONDS)
+            .readTimeout(10, TimeUnit.MINUTES)
+            .writeTimeout(10, TimeUnit.MINUTES)
+            .build()
     }
 
     private fun createNotifChannel() {
@@ -306,10 +311,8 @@ class DiscoverFragment : Fragment() {
                         onPlayClick = { track, pos ->
                             val currentPlayingId = PlayerManager.currentQueue.getOrNull(PlayerManager.currentIndex)?.id
                             if (track.id == currentPlayingId) {
-                                // Aynı şarkı ise çal/duraklat
                                 PlayerManager.togglePlayPause()
                             } else {
-                                // Farklı şarkı ise baştan başlat (Akıllı Çalma)
                                 val localUri = findLocalUri(track)
                                 if (localUri != null) {
                                     play(track, localUri, pos)
@@ -512,19 +515,6 @@ class DiscoverFragment : Fragment() {
         })
     }
 
-    private fun showAddToPlaylistDialog(track: Track) {
-        lifecycleScope.launch {
-            val playlists = AppDatabase.getInstance(requireContext()).playlistDao().getAllPlaylists().first()
-            if (playlists.isEmpty()) return@launch
-            val names = playlists.map { it.name }.toTypedArray()
-            AlertDialog.Builder(requireContext()).setItems(names) { _, i ->
-                lifecycleScope.launch {
-                    AppDatabase.getInstance(requireContext()).playlistSongDao().insertSong(PlaylistSongEntity(playlistId = playlists[i].id, videoId = track.id, title = track.name, author = track.artistName, thumbnail = track.image, duration = track.duration))
-                }
-            }.show()
-        }
-    }
-
     fun resetDownloadByPath(deletedFileName: String) {
         val position = currentTracks.indexOfFirst { track ->
             val safeName = getSafeFileName(track.name)
@@ -537,6 +527,7 @@ class DiscoverFragment : Fragment() {
 
     override fun onDestroyView() {
         super.onDestroyView()
+        PlayerManager.removePlaybackStateListener(playbackStateListener)
         _binding = null
     }
 }

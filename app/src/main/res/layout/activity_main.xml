@@ -16,7 +16,7 @@
     <androidx.cardview.widget.CardView
         android:id="@+id/miniPlayer"
         android:layout_width="match_parent"
-        android:layout_height="72dp"
+        android:layout_height="84dp"
         android:layout_gravity="bottom"
         android:layout_marginStart="12dp"
         android:layout_marginEnd="12dp"
@@ -28,100 +28,120 @@
 
         <androidx.constraintlayout.widget.ConstraintLayout
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:paddingStart="12dp"
-            android:paddingEnd="10dp">
+            android:layout_height="match_parent">
 
-            <!-- Sol vurgu çizgisi -->
-            <View
-                android:layout_width="3dp"
+            <!-- SeekBar - En üste, ince bir çizgi olarak -->
+            <SeekBar
+                android:id="@+id/miniPlayerSeekBar"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="-8dp"
+                android:max="1000"
+                android:paddingStart="0dp"
+                android:paddingEnd="0dp"
+                android:progressDrawable="@drawable/seekbar_progress"
+                android:thumb="@null"
+                app:layout_constraintTop_toTopOf="parent" />
+
+            <androidx.constraintlayout.widget.ConstraintLayout
+                android:layout_width="match_parent"
                 android:layout_height="0dp"
-                android:background="@color/accent"
+                android:paddingStart="12dp"
+                android:paddingEnd="10dp"
                 app:layout_constraintBottom_toBottomOf="parent"
-                app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintTop_toTopOf="parent" />
+                app:layout_constraintTop_toBottomOf="@+id/miniPlayerSeekBar">
 
-            <!-- Albüm kapağı -->
-            <ImageView
-                android:id="@+id/miniPlayerArt"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:layout_marginStart="10dp"
-                android:scaleType="centerCrop"
-                app:layout_constraintBottom_toBottomOf="parent"
-                app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintTop_toTopOf="parent" />
+                <!-- Sol vurgu çizgisi -->
+                <View
+                    android:layout_width="3dp"
+                    android:layout_height="0dp"
+                    android:background="@color/accent"
+                    app:layout_constraintBottom_toBottomOf="parent"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintTop_toTopOf="parent" />
 
-            <!-- Başlık + sanatçı -->
-            <TextView
-                android:id="@+id/miniPlayerTitle"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="12dp"
-                android:layout_marginEnd="6dp"
-                android:ellipsize="marquee"
-                android:marqueeRepeatLimit="marquee_forever"
-                android:maxLines="1"
-                android:textColor="#F0EEFF"
-                android:textSize="14sp"
-                android:textStyle="bold"
-                app:layout_constraintBottom_toTopOf="@+id/miniPlayerArtist"
-                app:layout_constraintEnd_toStartOf="@+id/miniPlayerPrev"
-                app:layout_constraintStart_toEndOf="@+id/miniPlayerArt"
-                app:layout_constraintTop_toTopOf="parent"
-                app:layout_constraintVertical_chainStyle="packed" />
+                <!-- Albüm kapağı -->
+                <ImageView
+                    android:id="@+id/miniPlayerArt"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:layout_marginStart="10dp"
+                    android:scaleType="centerCrop"
+                    app:layout_constraintBottom_toBottomOf="parent"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintTop_toTopOf="parent" />
 
-            <TextView
-                android:id="@+id/miniPlayerArtist"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
-                android:ellipsize="end"
-                android:maxLines="1"
-                android:textColor="#8A84BB"
-                android:textSize="11sp"
-                app:layout_constraintBottom_toBottomOf="parent"
-                app:layout_constraintEnd_toStartOf="@+id/miniPlayerPrev"
-                app:layout_constraintStart_toStartOf="@+id/miniPlayerTitle"
-                app:layout_constraintTop_toBottomOf="@+id/miniPlayerTitle" />
+                <!-- Başlık + sanatçı -->
+                <TextView
+                    android:id="@+id/miniPlayerTitle"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="12dp"
+                    android:layout_marginEnd="6dp"
+                    android:ellipsize="marquee"
+                    android:marqueeRepeatLimit="marquee_forever"
+                    android:maxLines="1"
+                    android:textColor="#F0EEFF"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    app:layout_constraintBottom_toTopOf="@+id/miniPlayerArtist"
+                    app:layout_constraintEnd_toStartOf="@+id/miniPlayerPrev"
+                    app:layout_constraintStart_toEndOf="@+id/miniPlayerArt"
+                    app:layout_constraintTop_toTopOf="parent"
+                    app:layout_constraintVertical_chainStyle="packed" />
 
-            <!-- Önceki -->
-            <ImageButton
-                android:id="@+id/miniPlayerPrev"
-                android:layout_width="38dp"
-                android:layout_height="38dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:src="@android:drawable/ic_media_previous"
-                android:tint="#8A84BB"
-                app:layout_constraintBottom_toBottomOf="parent"
-                app:layout_constraintEnd_toStartOf="@+id/miniPlayerPlayPause"
-                app:layout_constraintTop_toTopOf="parent" />
+                <TextView
+                    android:id="@+id/miniPlayerArtist"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:textColor="#8A84BB"
+                    android:textSize="11sp"
+                    app:layout_constraintBottom_toBottomOf="parent"
+                    app:layout_constraintEnd_toStartOf="@+id/miniPlayerPrev"
+                    app:layout_constraintStart_toStartOf="@+id/miniPlayerTitle"
+                    app:layout_constraintTop_toBottomOf="@+id/miniPlayerTitle" />
 
-            <!-- Oynat/Duraklat — dolu daire arka plan -->
-            <ImageButton
-                android:id="@+id/miniPlayerPlayPause"
-                android:layout_width="44dp"
-                android:layout_height="44dp"
-                android:background="@drawable/bg_play_button"
-                android:src="@android:drawable/ic_media_pause"
-                android:tint="#FFFFFF"
-                android:padding="10dp"
-                app:layout_constraintBottom_toBottomOf="parent"
-                app:layout_constraintEnd_toStartOf="@+id/miniPlayerNext"
-                app:layout_constraintTop_toTopOf="parent" />
+                <!-- Önceki -->
+                <ImageButton
+                    android:id="@+id/miniPlayerPrev"
+                    android:layout_width="38dp"
+                    android:layout_height="38dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:src="@android:drawable/ic_media_previous"
+                    android:tint="#8A84BB"
+                    app:layout_constraintBottom_toBottomOf="parent"
+                    app:layout_constraintEnd_toStartOf="@+id/miniPlayerPlayPause"
+                    app:layout_constraintTop_toTopOf="parent" />
 
-            <!-- Sonraki -->
-            <ImageButton
-                android:id="@+id/miniPlayerNext"
-                android:layout_width="38dp"
-                android:layout_height="38dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:src="@android:drawable/ic_media_next"
-                android:tint="#8A84BB"
-                app:layout_constraintBottom_toBottomOf="parent"
-                app:layout_constraintEnd_toEndOf="parent"
-                app:layout_constraintTop_toTopOf="parent" />
+                <!-- Oynat/Duraklat — dolu daire arka plan -->
+                <ImageButton
+                    android:id="@+id/miniPlayerPlayPause"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:background="@drawable/bg_play_button"
+                    android:src="@android:drawable/ic_media_pause"
+                    android:tint="#FFFFFF"
+                    android:padding="10dp"
+                    app:layout_constraintBottom_toBottomOf="parent"
+                    app:layout_constraintEnd_toStartOf="@+id/miniPlayerNext"
+                    app:layout_constraintTop_toTopOf="parent" />
 
+                <!-- Sonraki -->
+                <ImageButton
+                    android:id="@+id/miniPlayerNext"
+                    android:layout_width="38dp"
+                    android:layout_height="38dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:src="@android:drawable/ic_media_next"
+                    android:tint="#8A84BB"
+                    app:layout_constraintBottom_toBottomOf="parent"
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintTop_toTopOf="parent" />
+
+            </androidx.constraintlayout.widget.ConstraintLayout>
         </androidx.constraintlayout.widget.ConstraintLayout>
     </androidx.cardview.widget.CardView>
 

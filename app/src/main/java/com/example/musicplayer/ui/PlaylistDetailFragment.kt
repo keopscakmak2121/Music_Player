@@ -57,6 +57,10 @@ class PlaylistDetailFragment : Fragment() {
     private var songList: List<PlaylistSongEntity> = emptyList()
     private var loadJob: Job? = null
 
+    private val playbackStateListener: (Boolean) -> Unit = {
+        songAdapter.notifyDataSetChanged()
+    }
+
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         _binding = FragmentPlaylistDetailBinding.inflate(inflater, container, false)
         return binding.root
@@ -114,9 +118,7 @@ class PlaylistDetailFragment : Fragment() {
             }
         }
 
-        PlayerManager.onPlaybackStateChangedListener = {
-            songAdapter.notifyDataSetChanged()
-        }
+        PlayerManager.addPlaybackStateListener(playbackStateListener)
 
         loadPlaylistSongs()
         updatePlayModeUI()
@@ -207,6 +209,7 @@ class PlaylistDetailFragment : Fragment() {
 
     override fun onDestroyView() {
         super.onDestroyView()
+        PlayerManager.removePlaybackStateListener(playbackStateListener)
         _binding = null
     }
 }

@@ -123,7 +123,6 @@ class TrackAdapter(
     }
 
     private fun bindPlayingState(binding: ItemTrackBinding, position: Int, track: Track) {
-        // Hata buradaydı: Sadece pozisyona bakıyordu, çalma durumuna bakmıyordu.
         val isThisTrack = position == playingPosition
         val isActuallyPlaying = isThisTrack && PlayerManager.isPlaying()
 
@@ -136,7 +135,6 @@ class TrackAdapter(
                 root.strokeColor = android.graphics.Color.parseColor("#7C6FFF")
             } else {
                 btnPlay.setImageResource(android.R.drawable.ic_media_play)
-                // Eğer bu şarkı seçili ama duraklatılmışsa çerçeve kalsın ama play ikonu görünsün
                 root.strokeWidth = if (isThisTrack) 2 else 0
                 root.strokeColor = if (isThisTrack) android.graphics.Color.parseColor("#444466") else 0
             }
@@ -216,6 +214,12 @@ class TrackAdapter(
         playingPosition = position
         if (old >= 0) notifyItemChanged(old, PAYLOAD_PLAYING)
         if (position >= 0) notifyItemChanged(position, PAYLOAD_PLAYING)
+    }
+
+    fun notifyPlayingStateChanged() {
+        if (playingPosition >= 0) {
+            notifyItemChanged(playingPosition, PAYLOAD_PLAYING)
+        }
     }
 
     fun registerPreparing(position: Int) {
