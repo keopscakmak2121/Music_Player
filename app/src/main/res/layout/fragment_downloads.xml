@@ -48,23 +48,27 @@
 
         <Button
             android:id="@+id/btnTabMp3"
+            style="?android:attr/borderlessButtonStyle"
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
             android:backgroundTint="@color/accent"
             android:text="🎵 MP3"
+            android:textAllCaps="true"
             android:textColor="@color/white"
-            android:textSize="13sp" />
+            android:textSize="12sp" />
 
         <Button
             android:id="@+id/btnTabVideo"
+            style="?android:attr/borderlessButtonStyle"
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
             android:backgroundTint="@color/bg_elevated"
             android:text="🎬 Video"
+            android:textAllCaps="true"
             android:textColor="@color/text_secondary"
-            android:textSize="13sp" />
+            android:textSize="12sp" />
     </LinearLayout>
 
     <!-- Çalma Modu Bar -->
@@ -81,39 +85,41 @@
 
         <Button
             android:id="@+id/btnModeSequential"
-            android:layout_width="wrap_content"
-            android:layout_height="32dp"
-            android:layout_marginEnd="6dp"
-            android:backgroundTint="@color/accent"
-            android:paddingStart="14dp"
-            android:paddingEnd="14dp"
-            android:text="Sıralı"
-            android:textColor="@color/white"
-            android:textSize="12sp" />
-
-        <Button
-            android:id="@+id/btnModeShuffle"
-            android:layout_width="wrap_content"
-            android:layout_height="32dp"
-            android:layout_marginEnd="6dp"
-            android:backgroundTint="@color/bg_elevated"
-            android:paddingStart="14dp"
-            android:paddingEnd="14dp"
-            android:text="🔀 Karışık"
-            android:textColor="@color/text_secondary"
-            android:textSize="12sp" />
-
-        <Button
-            android:id="@+id/btnPlayAll"
+            style="?android:attr/borderlessButtonStyle"
             android:layout_width="0dp"
             android:layout_height="32dp"
             android:layout_weight="1"
+            android:layout_marginEnd="4dp"
+            android:backgroundTint="@color/accent"
+            android:padding="0dp"
+            android:text="Sıralı"
+            android:textColor="@color/white"
+            android:textSize="11sp" />
+
+        <Button
+            android:id="@+id/btnModeShuffle"
+            style="?android:attr/borderlessButtonStyle"
+            android:layout_width="0dp"
+            android:layout_height="32dp"
+            android:layout_weight="1.2"
+            android:layout_marginEnd="4dp"
+            android:backgroundTint="@color/bg_elevated"
+            android:padding="0dp"
+            android:text="🔀 Karışık"
+            android:textColor="@color/text_secondary"
+            android:textSize="11sp" />
+
+        <Button
+            android:id="@+id/btnPlayAll"
+            style="?android:attr/borderlessButtonStyle"
+            android:layout_width="0dp"
+            android:layout_height="32dp"
+            android:layout_weight="1.5"
             android:backgroundTint="@color/accent_dark"
-            android:paddingStart="14dp"
-            android:paddingEnd="14dp"
+            android:padding="0dp"
             android:text="▶ Tümünü Çal"
             android:textColor="@color/white"
-            android:textSize="12sp" />
+            android:textSize="11sp" />
     </LinearLayout>
 
     <!-- Toplu Seçim Bar (uzun basınca görünür) -->
