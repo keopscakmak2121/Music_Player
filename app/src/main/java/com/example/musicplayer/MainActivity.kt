@@ -132,6 +132,10 @@ class MainActivity : AppCompatActivity() {
     private fun setupMiniPlayer() {
         binding.miniPlayerPlayPause.setOnClickListener {
             val c = controller ?: return@setOnClickListener
+            // Scale animasyonu
+            it.animate().scaleX(0.85f).scaleY(0.85f).setDuration(80).withEndAction {
+                it.animate().scaleX(1f).scaleY(1f).setDuration(120).start()
+            }.start()
             if (c.isPlaying) {
                 c.pause()
                 binding.miniPlayerPlayPause.setImageResource(android.R.drawable.ic_media_play)
@@ -141,9 +145,15 @@ class MainActivity : AppCompatActivity() {
             }
         }
         binding.miniPlayerPrev.setOnClickListener {
+            it.animate().scaleX(0.8f).scaleY(0.8f).setDuration(80).withEndAction {
+                it.animate().scaleX(1f).scaleY(1f).setDuration(100).start()
+            }.start()
             PlayerManager.playPrev()
         }
         binding.miniPlayerNext.setOnClickListener {
+            it.animate().scaleX(0.8f).scaleY(0.8f).setDuration(80).withEndAction {
+                it.animate().scaleX(1f).scaleY(1f).setDuration(100).start()
+            }.start()
             PlayerManager.playNext()
         }
     }
@@ -189,14 +199,22 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateMiniPlayer(track: Track) {
         runOnUiThread {
+            val wasGone = binding.miniPlayer.visibility == View.GONE
             binding.miniPlayer.visibility = View.VISIBLE
+            if (wasGone) {
+                binding.miniPlayer.translationY = 100f
+                binding.miniPlayer.alpha = 0f
+                binding.miniPlayer.animate()
+                    .translationY(0f).alpha(1f).setDuration(300)
+                    .setInterpolator(android.view.animation.DecelerateInterpolator()).start()
+            }
             binding.miniPlayerTitle.text = track.name
-            binding.miniPlayerTitle.isSelected = true  // marquee scroll için
+            binding.miniPlayerTitle.isSelected = true
             binding.miniPlayerArtist.text = track.artistName
             binding.miniPlayerPlayPause.setImageResource(android.R.drawable.ic_media_pause)
             if (track.image.isNotEmpty()) {
                 binding.miniPlayerArt.load(track.image) {
-                    transformations(RoundedCornersTransformation(8f))
+                    transformations(RoundedCornersTransformation(12f))
                 }
             }
         }

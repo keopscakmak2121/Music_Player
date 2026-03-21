@@ -35,14 +35,14 @@
             android:layout_marginTop="2dp" />
     </LinearLayout>
 
-    <!-- MP3 / Video Tab Buttons -->
+    <!-- MP3 / Video Sekme -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="42dp"
         android:layout_marginStart="16dp"
         android:layout_marginEnd="16dp"
         android:layout_marginBottom="8dp"
-        android:background="#12121A"
+        android:background="@color/bg_secondary"
         android:orientation="horizontal"
         android:padding="4dp">
 
@@ -52,7 +52,7 @@
             android:layout_height="match_parent"
             android:layout_weight="1"
             android:backgroundTint="@color/accent"
-            android:text="MP3"
+            android:text="🎵 MP3"
             android:textColor="@color/white"
             android:textSize="13sp" />
 
@@ -62,12 +62,12 @@
             android:layout_height="match_parent"
             android:layout_weight="1"
             android:backgroundTint="@color/bg_elevated"
-            android:text="Video"
+            android:text="🎬 Video"
             android:textColor="@color/text_secondary"
             android:textSize="13sp" />
     </LinearLayout>
 
-    <!-- Playback Mode Bar -->
+    <!-- Çalma Modu Bar -->
     <LinearLayout
         android:id="@+id/playModeBar"
         android:layout_width="match_parent"
@@ -87,7 +87,7 @@
             android:backgroundTint="@color/accent"
             android:paddingStart="14dp"
             android:paddingEnd="14dp"
-            android:text="Sirali"
+            android:text="Sıralı"
             android:textColor="@color/white"
             android:textSize="12sp" />
 
@@ -99,7 +99,7 @@
             android:backgroundTint="@color/bg_elevated"
             android:paddingStart="14dp"
             android:paddingEnd="14dp"
-            android:text="Karisik"
+            android:text="🔀 Karışık"
             android:textColor="@color/text_secondary"
             android:textSize="12sp" />
 
@@ -111,12 +111,65 @@
             android:backgroundTint="@color/accent_dark"
             android:paddingStart="14dp"
             android:paddingEnd="14dp"
-            android:text="Tumunu Cal"
+            android:text="▶ Tümünü Çal"
             android:textColor="@color/white"
             android:textSize="12sp" />
     </LinearLayout>
 
-    <!-- List -->
+    <!-- Toplu Seçim Bar (uzun basınca görünür) -->
+    <LinearLayout
+        android:id="@+id/selectionBar"
+        android:layout_width="match_parent"
+        android:layout_height="44dp"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="6dp"
+        android:background="@color/bg_elevated"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="12dp"
+        android:paddingEnd="4dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/tvSelectionCount"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:textColor="@color/text_primary"
+            android:textSize="13sp"
+            android:text="0 seçildi" />
+
+        <Button
+            android:id="@+id/btnSelectAll"
+            android:layout_width="wrap_content"
+            android:layout_height="32dp"
+            android:backgroundTint="@color/bg_card"
+            android:text="Tümü"
+            android:textColor="@color/accent"
+            android:textSize="11sp" />
+
+        <Button
+            android:id="@+id/btnDeleteSelected"
+            android:layout_width="wrap_content"
+            android:layout_height="32dp"
+            android:layout_marginStart="4dp"
+            android:backgroundTint="@color/error"
+            android:text="Sil"
+            android:textColor="@color/white"
+            android:textSize="11sp" />
+
+        <ImageButton
+            android:id="@+id/btnCancelSelection"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@android:drawable/ic_menu_close_clear_cancel"
+            android:tint="@color/text_secondary" />
+
+    </LinearLayout>
+
+    <!-- Liste -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/rvDownloads"
         android:layout_width="match_parent"
@@ -125,7 +178,7 @@
         android:clipToPadding="false"
         android:paddingBottom="8dp" />
 
-    <!-- Empty State -->
+    <!-- Boş durum -->
     <LinearLayout
         android:id="@+id/emptyView"
         android:layout_width="match_parent"
@@ -146,7 +199,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
-            android:text="Henuz indirilen muzik yok"
+            android:text="Henüz indirilen müzik yok"
             android:textColor="@color/text_secondary"
             android:textSize="15sp" />
 

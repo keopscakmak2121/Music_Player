@@ -58,8 +58,9 @@ class DiscoverFragment : Fragment() {
     private var trackAdapter: TrackAdapter? = null
     private var currentTracks: MutableList<Track> = mutableListOf()
 
-    // videoId → (coroutine Job, cancelled flag)
-    private val activeDownloads = mutableMapOf<String, Pair<Job, AtomicBoolean>>()
+    // videoId → (coroutine Job, cancelled flag, okhttp call)
+    private val activeDownloads = mutableMapOf<String, Triple<Job, AtomicBoolean, okhttp3.Call?>>()
+    private val activeCallRef = mutableMapOf<String, okhttp3.Call>()  // videoId → call
     // fakeId → videoId
     private val fakeIdToVideoId = mutableMapOf<Long, String>()
     private var fakeIdCounter = 0L
@@ -94,6 +95,13 @@ class DiscoverFragment : Fragment() {
             if (actionId == EditorInfo.IME_ACTION_SEARCH) { doSearch(); true } else false
         }
         binding.btnDownloadAll.setOnClickListener { downloadAll("mp3") }
+        binding.btnSelectAll.setOnClickListener { trackAdapter?.selectAll() }
+        binding.btnCancelSelection.setOnClickListener {
+            trackAdapter?.exitSelectionMode()
+        }
+        binding.btnDownloadSelected.setOnClickListener {
+            downloadSelected()
+        }
 
         // Sayfalama: scroll dinleyici
         binding.rvTracks.addOnScrollListener(object : RecyclerView.OnScrollListener() {
@@ -178,19 +186,44 @@ class DiscoverFragment : Fragment() {
     // ─── Sync: indirme durumlarını MediaStore'dan oku ─────────
 
     private fun syncDownloadedState() {
+        if (!isAdded || _binding == null) return
         lifecycleScope.launch(Dispatchers.IO) {
             val downloadedNames = getDownloadedFileNames()
+
+            // IO thread'de URI'leri bul (MediaStore sorgusu ağır)
+            val localUriMap = mutableMapOf<Int, String>() // index → uri
+            currentTracks.forEachIndexed { index, track ->
+                if (activeDownloads.containsKey(track.id)) return@forEachIndexed
+                val safeName = track.name.take(50).replace(Regex("[/\\\\:*?\"<>|]"), "_")
+                val isDownloaded = downloadedNames.contains("$safeName.mp3") ||
+                        downloadedNames.contains("$safeName.mp4")
+                if (isDownloaded) {
+                    val uri = findLocalUri(track)
+                    if (uri != null) localUriMap[index] = uri
+                }
+            }
+
+            // Main thread'de hem track listesini hem adapter'ı güncelle
             withContext(Dispatchers.Main) {
+                if (!isAdded || _binding == null) return@withContext
                 currentTracks.forEachIndexed { index, track ->
-                    // Aktif indirme varsa dokunma
                     if (activeDownloads.containsKey(track.id)) return@forEachIndexed
-                    val safeName = track.name.take(50).replace(Regex("[/\\\\:*?\"<>|]"), "_")
-                    val isDownloaded = downloadedNames.contains("$safeName.mp3") ||
-                            downloadedNames.contains("$safeName.mp4")
+                    val localUri = localUriMap[index]
+                    val isDownloaded = localUri != null
                     val currentState = trackAdapter?.isDownloaded(index) ?: false
-                    when {
-                        isDownloaded && !currentState -> trackAdapter?.markCompletedByPosition(index)
-                        !isDownloaded && currentState -> trackAdapter?.cancelDownload(index)
+
+                    if (isDownloaded && localUri != null) {
+                        // audio alanına lokal URI yaz
+                        if (track.audio != localUri) {
+                            currentTracks[index] = track.copy(audio = localUri)
+                        }
+                        if (!currentState) trackAdapter?.markCompletedByPosition(index)
+                    } else if (!isDownloaded) {
+                        // Silindi veya hiç indirilmedi
+                        if (track.audio.isNotEmpty()) {
+                            currentTracks[index] = track.copy(audio = "")
+                        }
+                        if (currentState) trackAdapter?.cancelDownload(index)
                     }
                 }
             }
@@ -324,20 +357,28 @@ class DiscoverFragment : Fragment() {
                         currentTracks,
                         onTrackClick = { track ->
                             val index = currentTracks.indexOf(track)
-                            // İndirilmiş mi? Lokal dosyadan çal
-                            val localUri = findLocalUri(track)
-                            if (localUri != null) {
-                                PlayerManager.urlResolver = { t, cb -> cb(localUri) }
-                                PlayerManager.playQueue(currentTracks.toList(), index)
-                            } else {
-                                // Online çal
-                                PlayerManager.urlResolver = { t, cb -> resolveAndPlay(t, cb) }
-                                PlayerManager.playQueue(currentTracks.toList(), index)
+                            PlayerManager.urlResolver = { t, cb ->
+                                if (t.audio.isNotEmpty()) cb(t.audio)
+                                else resolveAndPlay(t, cb)
                             }
+                            PlayerManager.playQueue(currentTracks.toList(), index)
                         },
                         onDownloadClick = { track, pos -> showDownloadOptions(track, pos) },
                         onLongClick = { track -> showAddToPlaylistDialog(track) },
-                        onCancelDownload = { fakeId -> cancelDownloadByFakeId(fakeId) }
+                        onCancelDownload = { fakeId -> cancelDownloadByFakeId(fakeId) },
+                        onSelectionChanged = { count ->
+                            if (!isAdded || _binding == null) return@TrackAdapter
+                            if (count == -1) {
+                                // Seçim modu kapandı
+                                binding.selectionBar.visibility = View.GONE
+                                binding.btnDownloadAll.visibility =
+                                    if (currentTracks.isNotEmpty()) View.VISIBLE else View.GONE
+                            } else {
+                                binding.selectionBar.visibility = View.VISIBLE
+                                binding.btnDownloadAll.visibility = View.GONE
+                                binding.tvSelectionCount.text = "$count şarkı seçildi"
+                            }
+                        }
                     )
                     binding.rvTracks.adapter = trackAdapter
                     binding.btnDownloadAll.visibility = View.VISIBLE
@@ -371,19 +412,12 @@ class DiscoverFragment : Fragment() {
     // ─── İndirme ─────────────────────────────────────────────
 
     private fun showDownloadOptions(track: Track, position: Int) {
-        // Zaten aktif indirme var mı?
         if (activeDownloads.containsKey(track.id)) {
             Toast.makeText(requireContext(), "Bu şarkı zaten indiriliyor", Toast.LENGTH_SHORT).show()
             return
         }
-        // Zaten indirildi mi? (adapter state)
-        if (trackAdapter?.isDownloaded(position) == true) {
-            Toast.makeText(requireContext(), "Bu şarkı zaten indirildi", Toast.LENGTH_SHORT).show()
-            return
-        }
-        // Disk kontrolü (adapter state yoksa bile)
-        if (findLocalUri(track) != null) {
-            trackAdapter?.markCompletedByPosition(position)
+        // Adapter state veya lokal URI kontrolü
+        if (trackAdapter?.isDownloaded(position) == true || track.audio.isNotEmpty()) {
             Toast.makeText(requireContext(), "Bu şarkı zaten indirildi", Toast.LENGTH_SHORT).show()
             return
         }
@@ -399,12 +433,52 @@ class DiscoverFragment : Fragment() {
             }.show()
     }
 
+    /** Seçili şarkıları indir */
+    private fun downloadSelected() {
+        val prefs = requireContext().getSharedPreferences("melodify_prefs", Context.MODE_PRIVATE)
+        val limit = prefs.getInt("download_limit", 3)
+        val selectedTracks = trackAdapter?.getSelectedTracks() ?: return
+        val selectedPositions = trackAdapter?.getSelectedPositions() ?: return
+
+        val toDownload = selectedTracks.filterIndexed { i, track ->
+            val pos = selectedPositions.getOrElse(i) { -1 }
+            !activeDownloads.containsKey(track.id) &&
+            trackAdapter?.isDownloaded(pos) != true &&
+            track.audio.isEmpty()
+        }
+
+        if (toDownload.isEmpty()) {
+            Toast.makeText(requireContext(), "Seçili şarkılar zaten indirilmiş", Toast.LENGTH_SHORT).show()
+            trackAdapter?.exitSelectionMode()
+            return
+        }
+
+        AlertDialog.Builder(requireContext())
+            .setTitle("Seçilenleri İndir")
+            .setMessage("${toDownload.size} şarkı MP3 olarak indirilsin mi?\n(Aynı anda maks $limit)")
+            .setPositiveButton("İndir") { _, _ ->
+                var started = 0
+                toDownload.forEach { track ->
+                    if (started >= limit) return@forEach
+                    val pos = currentTracks.indexOf(track)
+                    if (pos >= 0) { startDownload(track, pos, "mp3", null); started++ }
+                }
+                Toast.makeText(requireContext(), "$started indirme başlatıldı", Toast.LENGTH_SHORT).show()
+                trackAdapter?.exitSelectionMode()
+            }
+            .setNegativeButton("İptal", null)
+            .show()
+    }
+
     /** Sanatçının tüm şarkılarını (mevcut arama sonuçlarını) toplu indir */
     fun downloadAll(format: String = "mp3") {
+        val prefs = requireContext().getSharedPreferences("melodify_prefs", Context.MODE_PRIVATE)
+        val limit = prefs.getInt("download_limit", 3)
+
         val notDownloaded = currentTracks.filterIndexed { index, track ->
             !activeDownloads.containsKey(track.id) &&
             trackAdapter?.isDownloaded(index) != true &&
-            findLocalUri(track) == null
+            track.audio.isEmpty()
         }
         if (notDownloaded.isEmpty()) {
             Toast.makeText(requireContext(), "Tüm şarkılar zaten indirilmiş", Toast.LENGTH_SHORT).show()
@@ -412,13 +486,18 @@ class DiscoverFragment : Fragment() {
         }
         AlertDialog.Builder(requireContext())
             .setTitle("Toplu İndir")
-            .setMessage("${notDownloaded.size} şarkı MP3 olarak indirilsin mi?")
+            .setMessage("${notDownloaded.size} şarkı MP3 olarak indirilsin mi?\n(Aynı anda maks $limit indirme)")
             .setPositiveButton("İndir") { _, _ ->
+                var started = 0
                 notDownloaded.forEach { track ->
+                    if (started >= limit) return@forEach  // limiti aşma
                     val pos = currentTracks.indexOf(track)
-                    if (pos >= 0) startDownload(track, pos, format, null)
+                    if (pos >= 0) {
+                        startDownload(track, pos, format, null)
+                        started++
+                    }
                 }
-                Toast.makeText(requireContext(), "${notDownloaded.size} indirme başlatıldı", Toast.LENGTH_SHORT).show()
+                Toast.makeText(requireContext(), "$started indirme başlatıldı", Toast.LENGTH_SHORT).show()
             }
             .setNegativeButton("İptal", null)
             .show()
@@ -451,26 +530,15 @@ class DiscoverFragment : Fragment() {
             try {
                 val req = Request.Builder().url(url).build()
                 val call = downloadClient.newCall(req)
-
-                // İptal watcher — cancelled flag set edilince OkHttp call'ını iptal et
-                val cancelWatcher = launch {
-                    while (true) {
-                        if (cancelled.get()) { call.cancel(); break }
-                        kotlinx.coroutines.delay(100)
-                    }
-                }
+                // Call referansını kaydet — iptal için
+                activeCallRef[track.id] = call
 
                 val resp = try {
                     call.execute()
                 } catch (e: Exception) {
-                    cancelWatcher.cancel()
-                    if (cancelled.get()) {
-                        // Kullanıcı iptal etti — UI zaten cancelDownloadByFakeId'de sıfırlandı
-                        return@launch
-                    }
+                    if (cancelled.get()) return@launch  // iptal edildi, sessizce çık
                     throw e
                 }
-                cancelWatcher.cancel()
 
                 if (cancelled.get()) return@launch
 
@@ -573,6 +641,12 @@ class DiscoverFragment : Fragment() {
 
                 withContext(Dispatchers.Main) {
                     trackAdapter?.markCompleted(fakeId)
+                    // Track.audio'ya lokal URI yaz — bir sonraki çalmada lokal kullanılsın
+                    val localUri = findLocalUri(track)
+                    if (localUri != null) {
+                        val idx = currentTracks.indexOfFirst { it.id == track.id }
+                        if (idx >= 0) currentTracks[idx] = currentTracks[idx].copy(audio = localUri)
+                    }
                     if (isAdded) Toast.makeText(requireContext(), "✓ İndirildi: ${track.name}", Toast.LENGTH_SHORT).show()
                 }
                 nm?.notify(notifId, NotificationCompat.Builder(ctx, NOTIF_CHANNEL)
@@ -592,28 +666,28 @@ class DiscoverFragment : Fragment() {
             } finally {
                 outputStream?.runCatching { close() }
                 if (cancelled.get()) {
-                    // İptal: yarım dosyayı sil
                     mediaStoreUri?.let { runCatching { ctx.contentResolver.delete(it, null, null) } }
                     legacyFile?.runCatching { delete() }
-                    // UI sıfırla (cancelDownloadByFakeId'den çağrılmışsa zaten sıfırlandı, tekrar sorun değil)
                     withContext(Dispatchers.Main) {
                         trackAdapter?.cancelDownload(position)
                     }
                 }
                 activeDownloads.remove(track.id)
+                activeCallRef.remove(track.id)
                 fakeIdToVideoId.remove(fakeId)
                 nm?.cancel(notifId)
             }
         }
 
-        activeDownloads[track.id] = Pair(job, cancelled)
+        activeDownloads[track.id] = Triple(job, cancelled, null)
     }
 
     private fun cancelDownloadByFakeId(fakeId: Long) {
         val videoId = fakeIdToVideoId[fakeId] ?: return
-        val (job, cancelled) = activeDownloads[videoId] ?: return
-        cancelled.set(true)
-        job.cancel()
+        val triple = activeDownloads[videoId] ?: return
+        triple.second.set(true)          // cancelled = true
+        activeCallRef[videoId]?.cancel() // OkHttp call'ı direkt iptal et (blocking read durur)
+        triple.first.cancel()            // coroutine'i de cancel et
         val position = trackAdapter?.positionForFakeId(fakeId) ?: return
         trackAdapter?.cancelDownload(position)
     }

@@ -87,7 +87,60 @@
         </LinearLayout>
     </androidx.cardview.widget.CardView>
 
-    <!-- Toplu indirme butonu — sadece sonuç gelince görünür -->
+    <!-- Toplu Seçim Bar (uzun basınca görünür) -->
+    <LinearLayout
+        android:id="@+id/selectionBar"
+        android:layout_width="match_parent"
+        android:layout_height="44dp"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="6dp"
+        android:background="@color/bg_elevated"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="12dp"
+        android:paddingEnd="4dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/tvSelectionCount"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:textColor="@color/text_primary"
+            android:textSize="13sp"
+            android:text="0 seçildi" />
+
+        <Button
+            android:id="@+id/btnSelectAll"
+            android:layout_width="wrap_content"
+            android:layout_height="32dp"
+            android:backgroundTint="@color/bg_card"
+            android:text="Tümü"
+            android:textColor="@color/accent"
+            android:textSize="11sp" />
+
+        <Button
+            android:id="@+id/btnDownloadSelected"
+            android:layout_width="wrap_content"
+            android:layout_height="32dp"
+            android:layout_marginStart="4dp"
+            android:backgroundTint="@color/accent"
+            android:text="⬇ İndir"
+            android:textColor="@color/white"
+            android:textSize="11sp" />
+
+        <ImageButton
+            android:id="@+id/btnCancelSelection"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@android:drawable/ic_menu_close_clear_cancel"
+            android:tint="@color/text_secondary" />
+
+    </LinearLayout>
+
+    <!-- Toplu indirme butonu -->
     <Button
         android:id="@+id/btnDownloadAll"
         android:layout_width="match_parent"

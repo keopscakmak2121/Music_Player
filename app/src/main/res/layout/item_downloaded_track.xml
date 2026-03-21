@@ -6,7 +6,7 @@
     android:layout_height="wrap_content"
     android:layout_marginStart="14dp"
     android:layout_marginEnd="14dp"
-    android:layout_marginBottom="7dp"
+    android:layout_marginBottom="6dp"
     android:foreground="?attr/selectableItemBackground"
     app:cardBackgroundColor="@color/bg_card"
     app:cardCornerRadius="16dp"
@@ -17,19 +17,30 @@
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
         android:layout_height="64dp"
-        android:paddingStart="14dp"
+        android:paddingStart="12dp"
         android:paddingEnd="4dp">
 
-        <!-- Tür ikonu (müzik nota veya video) -->
+        <!-- Seçim checkbox -->
+        <CheckBox
+            android:id="@+id/checkBox"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:visibility="gone"
+            android:buttonTint="@color/accent"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
+
+        <!-- Tür ikonu -->
         <ImageView
             android:id="@+id/ivMusicIcon"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
+            android:layout_width="38dp"
+            android:layout_height="38dp"
             android:src="@android:drawable/ic_media_play"
             android:tint="@color/accent"
             android:padding="4dp"
             app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintStart_toEndOf="@+id/checkBox"
             app:layout_constraintTop_toTopOf="parent" />
 
         <!-- Dosya adı -->

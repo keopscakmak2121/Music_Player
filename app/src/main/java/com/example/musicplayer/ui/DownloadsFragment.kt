@@ -148,33 +148,82 @@ class DownloadsFragment : Fragment() {
         }
     }
 
+    private var currentAdapter: DownloadedTrackAdapter? = null
+
     private fun filterAndShow() {
         if (!isAdded || _binding == null) return
         val filtered = allFiles.filter { it.isVideo == showingVideo }
         updateEmptyState(filtered.isEmpty())
 
-        // Çalma modu barı: sadece MP3 sekmesinde göster
         binding.playModeBar.visibility = if (!showingVideo && filtered.isNotEmpty()) View.VISIBLE else View.GONE
         updatePlayModeUI()
 
-        binding.rvDownloads.adapter = DownloadedTrackAdapter(
+        val adapter = DownloadedTrackAdapter(
             filtered.toMutableList(),
             onPlayClick = { file ->
                 if (file.isVideo) {
                     openVideoPlayer(file)
                 } else {
-                    val playUri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                        file.uri.toString()
-                    } else {
-                        file.path
-                    }
+                    val playUri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
+                        file.uri.toString() else file.path
                     val track = Track(file.path, file.name, "Yerel Dosya", "", playUri, 0)
                     onFileSelected?.invoke(track, playUri)
                 }
             },
             onDeleteClick = { file, _ -> confirmDelete(file) },
-            onAddToPlaylist = { file -> showAddToPlaylistDialog(file) }
+            onAddToPlaylist = { file -> showAddToPlaylistDialog(file) },
+            onSelectionChanged = { count ->
+                if (count == -1) {
+                    // Seçim modu kapandı
+                    binding.selectionBar.visibility = View.GONE
+                    binding.btnTabMp3.isEnabled = true
+                    binding.btnTabVideo.isEnabled = true
+                } else {
+                    binding.selectionBar.visibility = View.VISIBLE
+                    binding.tvSelectionCount.text = "$count şarkı seçildi"
+                    binding.btnTabMp3.isEnabled = false
+                    binding.btnTabVideo.isEnabled = false
+                }
+            }
         )
+        currentAdapter = adapter
+        binding.rvDownloads.adapter = adapter
+
+        binding.btnSelectAll.setOnClickListener { currentAdapter?.selectAll() }
+        binding.btnDeleteSelected.setOnClickListener { confirmDeleteSelected() }
+        binding.btnCancelSelection.setOnClickListener { currentAdapter?.exitSelectionMode() }
+    }
+
+    private fun confirmDeleteSelected() {
+        val selected = currentAdapter?.getSelectedFiles() ?: return
+        if (selected.isEmpty()) return
+        android.app.AlertDialog.Builder(requireContext())
+            .setTitle("Toplu Sil")
+            .setMessage("${selected.size} dosya silinsin mi?")
+            .setPositiveButton("Sil") { _, _ ->
+                lifecycleScope.launch {
+                    var deletedCount = 0
+                    withContext(Dispatchers.IO) {
+                        selected.forEach { file ->
+                            val ok = try {
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
+                                    requireContext().contentResolver.delete(file.uri, null, null) > 0
+                                else java.io.File(file.path).delete()
+                            } catch (e: Exception) { false }
+                            if (ok) {
+                                deletedCount++
+                                AppDatabase.getInstance(requireContext())
+                                    .playlistSongDao().deleteSongByVideoId(file.path)
+                                onFileDeleted?.invoke(file.name)
+                            }
+                        }
+                    }
+                    Toast.makeText(requireContext(), "$deletedCount dosya silindi", Toast.LENGTH_SHORT).show()
+                    loadDownloadedFiles()
+                }
+            }
+            .setNegativeButton("İptal", null)
+            .show()
     }
 
     private fun queryMelodifyFiles(): List<LocalFile> {

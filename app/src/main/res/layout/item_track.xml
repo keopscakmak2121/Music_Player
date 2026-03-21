@@ -17,20 +17,33 @@
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:paddingStart="14dp"
+        android:paddingStart="10dp"
         android:paddingEnd="6dp"
         android:paddingTop="11dp"
         android:paddingBottom="11dp">
 
+        <!-- Seçim checkbox (seçim modunda görünür) -->
+        <CheckBox
+            android:id="@+id/checkBox"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:visibility="gone"
+            android:buttonTint="@color/accent"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
+
+        <!-- Albüm kapağı -->
         <ImageView
             android:id="@+id/ivAlbumArt"
             android:layout_width="50dp"
             android:layout_height="50dp"
             android:scaleType="centerCrop"
-            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintStart_toEndOf="@+id/checkBox"
             app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintBottom_toBottomOf="parent" />
 
+        <!-- Şarkı adı -->
         <TextView
             android:id="@+id/tvTrackName"
             android:layout_width="0dp"
@@ -47,6 +60,7 @@
             app:layout_constraintBottom_toTopOf="@+id/tvArtistName"
             app:layout_constraintVertical_chainStyle="packed" />
 
+        <!-- Sanatçı -->
         <TextView
             android:id="@+id/tvArtistName"
             android:layout_width="0dp"
@@ -61,6 +75,7 @@
             app:layout_constraintTop_toBottomOf="@+id/tvTrackName"
             app:layout_constraintBottom_toTopOf="@+id/downloadProgress" />
 
+        <!-- Süre -->
         <TextView
             android:id="@+id/tvDuration"
             android:layout_width="wrap_content"
@@ -72,6 +87,7 @@
             app:layout_constraintTop_toBottomOf="@+id/tvTrackName"
             app:layout_constraintBottom_toTopOf="@+id/downloadProgress" />
 
+        <!-- İndirme progress -->
         <ProgressBar
             android:id="@+id/downloadProgress"
             style="@android:style/Widget.ProgressBar.Horizontal"
@@ -88,6 +104,7 @@
             app:layout_constraintTop_toBottomOf="@+id/tvArtistName"
             app:layout_constraintBottom_toBottomOf="parent" />
 
+        <!-- Durum metni -->
         <TextView
             android:id="@+id/tvDownloadPercent"
             android:layout_width="wrap_content"
@@ -99,13 +116,15 @@
             app:layout_constraintStart_toStartOf="@+id/tvTrackName"
             app:layout_constraintTop_toBottomOf="@+id/downloadProgress" />
 
+        <!-- İndir butonu -->
         <ImageButton
             android:id="@+id/btnDownload"
-            android:layout_width="44dp"
-            android:layout_height="44dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:src="@android:drawable/stat_sys_download"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="@drawable/bg_download_button"
+            android:src="@android:drawable/ic_menu_save"
             android:tint="@color/accent"
+            android:padding="8dp"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintTop_toTopOf="parent" />

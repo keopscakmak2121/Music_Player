@@ -23,7 +23,8 @@ class TrackAdapter(
     private val onTrackClick: (Track) -> Unit,
     private val onDownloadClick: (Track, Int) -> Unit,
     private val onLongClick: ((Track) -> Unit)? = null,
-    private val onCancelDownload: ((Long) -> Unit)? = null
+    private val onCancelDownload: ((Long) -> Unit)? = null,
+    private val onSelectionChanged: ((Int) -> Unit)? = null  // seçili sayısı, -1=mod kapandı
 ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
     // fakeId → position
@@ -32,6 +33,11 @@ class TrackAdapter(
     private val progressMap = mutableMapOf<Int, Int>()
     private var playingPosition: Int = -1
     private var isLoadingMore = false
+
+    // Çoklu seçim
+    private val selectedPositions = mutableSetOf<Int>()
+    var selectionMode = false
+        private set
 
     private fun fakeIdForPosition(position: Int): Long? =
         downloadMap.entries.firstOrNull { it.value == position }?.key
@@ -84,10 +90,26 @@ class TrackAdapter(
         if (holder is LoadingViewHolder) return
         val tvHolder = holder as TrackViewHolder
         val track = tracks[position]
+        val isSelected = selectedPositions.contains(position)
         tvHolder.binding.apply {
             tvTrackName.text  = track.name
             tvArtistName.text = track.artistName
             tvDuration.text   = formatDuration(track.duration)
+
+            // Seçim modu görünümü
+            checkBox.visibility = if (selectionMode) View.VISIBLE else View.GONE
+            checkBox.isChecked = isSelected
+            checkBox.setOnClickListener { toggleSelection(position) }
+
+            // Kart rengi seçime göre
+            root.setCardBackgroundColor(
+                if (isSelected) android.graphics.Color.parseColor("#1E1545")
+                else android.graphics.Color.parseColor("#13131F")
+            )
+            if (isSelected) {
+                root.strokeColor = android.graphics.Color.parseColor("#7C6FFF")
+                root.strokeWidth = 2
+            }
 
             // Kart giriş animasyonu
             root.alpha = 0f
@@ -99,14 +121,27 @@ class TrackAdapter(
                 .setInterpolator(AccelerateDecelerateInterpolator())
                 .start()
 
-            root.setOnClickListener { onTrackClick(track) }
+            root.setOnClickListener {
+                if (selectionMode) {
+                    toggleSelection(position)
+                } else {
+                    onTrackClick(track)
+                }
+            }
 
             root.setOnLongClickListener {
-                if (progressMap[position] == -1) onLongClick?.invoke(track)
+                if (!selectionMode) {
+                    enterSelectionMode()
+                    toggleSelection(position)
+                } else {
+                    // Seçim modunda uzun bas → playlist ekle (indirilmişse)
+                    if (progressMap[position] == -1) onLongClick?.invoke(track)
+                }
                 true
             }
 
             btnDownload.setOnClickListener {
+                if (selectionMode) return@setOnClickListener  // seçim modunda indir basılamaz
                 val state = progressMap[position]
                 when {
                     state != null && state >= -2 && state != -1 -> {
@@ -120,7 +155,7 @@ class TrackAdapter(
                                 .show()
                         }
                     }
-                    state == -1 -> { /* zaten indirildi, bir şey yapma */ }
+                    state == -1 -> { /* zaten indirildi */ }
                     else -> onDownloadClick(track, position)
                 }
             }
@@ -177,31 +212,32 @@ class TrackAdapter(
         binding.apply {
             when {
                 progress == null -> {
+                    // İndirilmedi — mor çerçeveli yuvarlak, tint sıfırla
                     downloadProgress.visibility = View.GONE
                     tvDownloadPercent.visibility = View.GONE
-                    btnDownload.setImageResource(android.R.drawable.stat_sys_download)
-                    btnDownload.setColorFilter(
-                        android.graphics.Color.parseColor("#7C6FFF"),
-                        android.graphics.PorterDuff.Mode.SRC_IN
-                    )
+                    btnDownload.setImageResource(android.R.drawable.ic_menu_save)
+                    btnDownload.setColorFilter(android.graphics.Color.parseColor("#7C6FFF"), android.graphics.PorterDuff.Mode.SRC_IN)
+                    btnDownload.setBackgroundResource(com.example.musicplayer.R.drawable.bg_download_button)
+                    btnDownload.backgroundTintList = null  // önceki kırmızı/yeşil tint'i temizle
                     btnDownload.animation?.cancel()
                     btnDownload.clearAnimation()
                     btnDownload.isEnabled = true
+                    btnDownload.alpha = 1f
+                    btnDownload.scaleX = 1f
+                    btnDownload.scaleY = 1f
                 }
                 progress == -2 -> {
-                    // Hazırlanıyor — dönen ikon
+                    // Hazırlanıyor — dönen ikon, pembe-mor
                     downloadProgress.visibility = View.VISIBLE
                     downloadProgress.isIndeterminate = true
                     tvDownloadPercent.visibility = View.VISIBLE
                     tvDownloadPercent.text = "Hazırlanıyor…"
                     btnDownload.setImageResource(android.R.drawable.ic_popup_sync)
-                    btnDownload.setColorFilter(
-                        android.graphics.Color.parseColor("#C961FF"),
-                        android.graphics.PorterDuff.Mode.SRC_IN
-                    )
+                    btnDownload.setColorFilter(android.graphics.Color.parseColor("#C961FF"), android.graphics.PorterDuff.Mode.SRC_IN)
+                    btnDownload.setBackgroundResource(com.example.musicplayer.R.drawable.bg_download_button)
                     btnDownload.isEnabled = true
                     if (btnDownload.animation == null) {
-                        val rot = android.view.animation.RotateAnimation(
+                        btnDownload.startAnimation(android.view.animation.RotateAnimation(
                             0f, 360f,
                             android.view.animation.Animation.RELATIVE_TO_SELF, 0.5f,
                             android.view.animation.Animation.RELATIVE_TO_SELF, 0.5f
@@ -209,45 +245,40 @@ class TrackAdapter(
                             duration = 900
                             repeatCount = android.view.animation.Animation.INFINITE
                             interpolator = LinearInterpolator()
-                        }
-                        btnDownload.startAnimation(rot)
+                        })
                     }
                 }
                 progress == -1 -> {
-                    // Tamamlandı — yeşil check animasyonu
+                    // Tamamlandı — yeşil dolu daire
                     downloadProgress.visibility = View.GONE
                     downloadProgress.isIndeterminate = false
                     tvDownloadPercent.visibility = View.VISIBLE
                     tvDownloadPercent.text = "✓ İndirildi"
                     tvDownloadPercent.setTextColor(android.graphics.Color.parseColor("#3DCC6B"))
                     btnDownload.setImageResource(android.R.drawable.checkbox_on_background)
-                    btnDownload.setColorFilter(
-                        android.graphics.Color.parseColor("#3DCC6B"),
-                        android.graphics.PorterDuff.Mode.SRC_IN
-                    )
+                    btnDownload.setColorFilter(android.graphics.Color.parseColor("#FFFFFF"), android.graphics.PorterDuff.Mode.SRC_IN)
+                    btnDownload.setBackgroundResource(com.example.musicplayer.R.drawable.bg_play_button)
+                    btnDownload.backgroundTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#3DCC6B"))
                     btnDownload.animation?.cancel()
                     btnDownload.clearAnimation()
                     btnDownload.isEnabled = false
-
-                    // Tamamlanma animasyonu: kısa scale pulse
-                    btnDownload.scaleX = 0.6f
-                    btnDownload.scaleY = 0.6f
-                    btnDownload.animate().scaleX(1f).scaleY(1f).setDuration(300)
+                    // Scale animasyonu
+                    btnDownload.scaleX = 0.5f; btnDownload.scaleY = 0.5f
+                    btnDownload.animate().scaleX(1f).scaleY(1f).setDuration(280)
                         .setInterpolator(AccelerateDecelerateInterpolator()).start()
                 }
                 else -> {
-                    // İndiriliyor (0-100)
+                    // İndiriliyor (0-100) — kırmızı iptal butonu
                     downloadProgress.visibility = View.VISIBLE
                     downloadProgress.isIndeterminate = false
                     downloadProgress.progress = progress
                     tvDownloadPercent.visibility = View.VISIBLE
-                    tvDownloadPercent.text = "⏸ İptal — %$progress"
+                    tvDownloadPercent.text = "✕ İptal  %$progress"
                     tvDownloadPercent.setTextColor(android.graphics.Color.parseColor("#7C6FFF"))
                     btnDownload.setImageResource(android.R.drawable.ic_menu_close_clear_cancel)
-                    btnDownload.setColorFilter(
-                        android.graphics.Color.parseColor("#FF4F6B"),
-                        android.graphics.PorterDuff.Mode.SRC_IN
-                    )
+                    btnDownload.setColorFilter(android.graphics.Color.parseColor("#FFFFFF"), android.graphics.PorterDuff.Mode.SRC_IN)
+                    btnDownload.setBackgroundResource(com.example.musicplayer.R.drawable.bg_play_button)
+                    btnDownload.backgroundTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#FF4F6B"))
                     btnDownload.animation?.cancel()
                     btnDownload.clearAnimation()
                     btnDownload.isEnabled = true
@@ -255,6 +286,42 @@ class TrackAdapter(
             }
         }
     }
+
+    // ─── Seçim modu ──────────────────────────────────────────
+
+    fun enterSelectionMode() {
+        selectionMode = true
+        notifyDataSetChanged()
+        onSelectionChanged?.invoke(0)
+    }
+
+    fun exitSelectionMode() {
+        selectionMode = false
+        selectedPositions.clear()
+        notifyDataSetChanged()
+        onSelectionChanged?.invoke(-1)
+    }
+
+    private fun toggleSelection(position: Int) {
+        if (selectedPositions.contains(position)) selectedPositions.remove(position)
+        else selectedPositions.add(position)
+        notifyItemChanged(position)
+        onSelectionChanged?.invoke(selectedPositions.size)
+        if (selectedPositions.isEmpty() && selectionMode) exitSelectionMode()
+    }
+
+    fun selectAll() {
+        tracks.indices.forEach { selectedPositions.add(it) }
+        notifyDataSetChanged()
+        onSelectionChanged?.invoke(selectedPositions.size)
+    }
+
+    fun getSelectedTracks(): List<Track> =
+        selectedPositions.sorted().mapNotNull { tracks.getOrNull(it) }
+
+    fun getSelectedPositions(): List<Int> = selectedPositions.sorted()
+
+    // ─── Loading footer ───────────────────────────────────────
 
     fun setLoadingMore(loading: Boolean) {
         val wasLoading = isLoadingMore
