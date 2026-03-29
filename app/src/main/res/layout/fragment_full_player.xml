@@ -20,20 +20,21 @@
         app:tint="@color/white"
         android:contentDescription="Kapat"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+        app:layout_constraintTop_toTopOf="parent"
+        android:visibility="gone" />
 
     <TextView
         android:id="@+id/tvNowPlaying"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:layout_marginTop="28dp"
         android:text="Şu An Çalıyor"
         android:textColor="#8A84BB"
         android:textSize="14sp"
         android:textStyle="bold"
-        app:layout_constraintBottom_toBottomOf="@+id/btnBack"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="@+id/btnBack" />
+        app:layout_constraintTop_toTopOf="parent" />
 
     <ImageButton
         android:id="@+id/btnFullDownload"
@@ -159,7 +160,8 @@
             android:background="?attr/selectableItemBackgroundBorderless"
             android:src="@android:drawable/ic_menu_share"
             android:contentDescription="Karıştır"
-            app:tint="#8A84BB" />
+            app:tint="#8A84BB"
+            android:visibility="gone" />
 
         <ImageButton
             android:id="@+id/btnPrev"
@@ -199,7 +201,41 @@
             android:background="?attr/selectableItemBackgroundBorderless"
             android:src="@android:drawable/ic_menu_revert"
             android:contentDescription="Tekrarla"
-            app:tint="#8A84BB" />
+            app:tint="#8A84BB"
+            android:visibility="gone" />
+
+    </LinearLayout>
+
+    <!-- Yeni Alt Kontroller: Sıra Çalma ve Karışık Çalma -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="32dp"
+        android:gravity="center"
+        android:orientation="horizontal"
+        app:layout_constraintTop_toBottomOf="@+id/llControls">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnSequenceMode"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="8dp"
+            android:text="Sırayla Çal"
+            android:textColor="#8A84BB"
+            app:icon="@android:drawable/ic_menu_sort_by_size"
+            app:iconTint="#8A84BB" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnShuffleMode"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:text="Karışık Çal"
+            android:textColor="#8A84BB"
+            app:icon="@android:drawable/ic_menu_share"
+            app:iconTint="#8A84BB" />
 
     </LinearLayout>
 

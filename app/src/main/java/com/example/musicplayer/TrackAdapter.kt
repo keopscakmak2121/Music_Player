@@ -112,7 +112,7 @@ class TrackAdapter(
                 progress == null -> {
                     downloadProgress.visibility = View.GONE
                     tvDownloadPercent.visibility = View.GONE
-                    btnDownload.setImageResource(android.R.drawable.ic_menu_save)
+                    btnDownload.setImageResource(android.R.drawable.stat_sys_download)
                     btnDownload.isEnabled = true
                     btnPlay.isEnabled = true
                 }

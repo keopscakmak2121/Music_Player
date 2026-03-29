@@ -80,18 +80,15 @@ class FullPlayerFragment : Fragment() {
             PlayerManager.playNext()
         }
 
-        binding.btnShuffle.setOnClickListener {
-            PlayerManager.playMode = if (PlayerManager.playMode == PlayMode.SHUFFLE) {
-                PlayMode.SEQUENTIAL
-            } else {
-                PlayMode.SHUFFLE
-            }
-            updateShuffleRepeatUI()
+        // Yeni mod butonları
+        binding.btnSequenceMode.setOnClickListener {
+            PlayerManager.playMode = PlayMode.SEQUENTIAL
+            updateModeUI()
         }
 
-        binding.btnRepeat.setOnClickListener {
-            PlayerManager.repeatMode = !PlayerManager.repeatMode
-            updateShuffleRepeatUI()
+        binding.btnShuffleMode.setOnClickListener {
+            PlayerManager.playMode = PlayMode.SHUFFLE
+            updateModeUI()
         }
 
         binding.fullPlayerSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
@@ -154,21 +151,23 @@ class FullPlayerFragment : Fragment() {
             }
         }
         
-        updateShuffleRepeatUI()
+        updateModeUI()
     }
 
-    private fun updateShuffleRepeatUI() {
+    private fun updateModeUI() {
         val context = context ?: return
         val activeColor = ContextCompat.getColor(context, R.color.accent)
         val inactiveColor = Color.parseColor("#8A84BB")
 
-        binding.btnShuffle.imageTintList = ColorStateList.valueOf(
-            if (PlayerManager.playMode == PlayMode.SHUFFLE) activeColor else inactiveColor
-        )
-        
-        binding.btnRepeat.imageTintList = ColorStateList.valueOf(
-            if (PlayerManager.repeatMode) activeColor else inactiveColor
-        )
+        // Sırayla Çal Butonu
+        val isSeq = PlayerManager.playMode == PlayMode.SEQUENTIAL
+        binding.btnSequenceMode.setTextColor(if (isSeq) activeColor else inactiveColor)
+        binding.btnSequenceMode.iconTint = ColorStateList.valueOf(if (isSeq) activeColor else inactiveColor)
+
+        // Karışık Çal Butonu
+        val isShuffle = PlayerManager.playMode == PlayMode.SHUFFLE
+        binding.btnShuffleMode.setTextColor(if (isShuffle) activeColor else inactiveColor)
+        binding.btnShuffleMode.iconTint = ColorStateList.valueOf(if (isShuffle) activeColor else inactiveColor)
     }
 
     private fun startProgressUpdate() {
