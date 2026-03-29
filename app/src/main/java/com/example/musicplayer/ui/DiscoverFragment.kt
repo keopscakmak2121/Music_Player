@@ -345,6 +345,16 @@ class DiscoverFragment : Fragment() {
         }.show()
     }
 
+    fun triggerDownload(track: Track) {
+        val position = currentTracks.indexOfFirst { it.id == track.id }
+        if (position >= 0) {
+            showDownloadOptions(track, position)
+        } else {
+            // Şarkı listede yoksa bile varsayılan olarak MP3 indir
+            startDownload(track, -1, "mp3", null)
+        }
+    }
+
     private fun downloadSelected() {
         val prefs = requireContext().getSharedPreferences("melodify_prefs", Context.MODE_PRIVATE)
         val limit = prefs.getInt("download_limit", 3)
@@ -376,8 +386,10 @@ class DiscoverFragment : Fragment() {
         fakeIdToVideoId[fakeId] = track.id
         val cancelled = AtomicBoolean(false)
 
-        trackAdapter?.registerPreparing(position)
-        trackAdapter?.registerDownload(fakeId, position)
+        if (position >= 0) {
+            trackAdapter?.registerPreparing(position)
+            trackAdapter?.registerDownload(fakeId, position)
+        }
 
         val notifId = track.id.hashCode()
         val nm = requireContext().getSystemService(NotificationManager::class.java)
@@ -394,7 +406,7 @@ class DiscoverFragment : Fragment() {
                 val resp = call.execute()
 
                 if (cancelled.get() || !resp.isSuccessful) {
-                    withContext(Dispatchers.Main) { trackAdapter?.cancelDownload(position) }
+                    withContext(Dispatchers.Main) { if (position >= 0) trackAdapter?.cancelDownload(position) }
                     return@launch
                 }
 
@@ -437,7 +449,7 @@ class DiscoverFragment : Fragment() {
                             if (totalBytes > 0) {
                                 val pct = ((downloaded * 100) / totalBytes).toInt()
                                 withContext(Dispatchers.Main) { 
-                                    trackAdapter?.updateProgress(fakeId, pct) 
+                                    if (position >= 0) trackAdapter?.updateProgress(fakeId, pct) 
                                 }
                             }
                         }
@@ -452,12 +464,16 @@ class DiscoverFragment : Fragment() {
                     }
                     
                     withContext(Dispatchers.Main) {
-                        trackAdapter?.markCompleted(fakeId)
-                        syncDownloadedState(position)
+                        if (position >= 0) {
+                            trackAdapter?.markCompleted(fakeId)
+                            syncDownloadedState(position)
+                        } else {
+                            Toast.makeText(ctx, "İndirme tamamlandı: ${track.name}", Toast.LENGTH_SHORT).show()
+                        }
                     }
                 }
             } catch (e: Exception) {
-                withContext(Dispatchers.Main) { trackAdapter?.cancelDownload(position) }
+                withContext(Dispatchers.Main) { if (position >= 0) trackAdapter?.cancelDownload(position) }
             } finally {
                 activeDownloads.remove(track.id)
                 nm?.cancel(notifId)

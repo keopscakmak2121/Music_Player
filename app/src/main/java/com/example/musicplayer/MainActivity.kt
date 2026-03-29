@@ -22,6 +22,7 @@ import com.example.musicplayer.db.PlaylistEntity
 import com.example.musicplayer.model.Track
 import com.example.musicplayer.ui.DiscoverFragment
 import com.example.musicplayer.ui.DownloadsFragment
+import com.example.musicplayer.ui.FullPlayerFragment
 import com.example.musicplayer.ui.PlaylistDetailFragment
 import com.example.musicplayer.ui.PlaylistsFragment
 import com.example.musicplayer.ui.SettingsFragment
@@ -40,6 +41,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var downloadsFragment: DownloadsFragment
     private lateinit var settingsFragment: SettingsFragment
     private lateinit var playlistDetailFragment: PlaylistDetailFragment
+    private lateinit var fullPlayerFragment: FullPlayerFragment
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private var isUserSeeking = false
@@ -125,6 +127,7 @@ class MainActivity : AppCompatActivity() {
             downloadsFragment = DownloadsFragment()
             settingsFragment = SettingsFragment()
             playlistDetailFragment = PlaylistDetailFragment()
+            fullPlayerFragment = FullPlayerFragment()
 
             supportFragmentManager.beginTransaction()
                 .add(R.id.fragmentContainer, discoverFragment, "discover")
@@ -132,6 +135,7 @@ class MainActivity : AppCompatActivity() {
                 .add(R.id.fragmentContainer, downloadsFragment, "downloads").hide(downloadsFragment)
                 .add(R.id.fragmentContainer, settingsFragment, "settings").hide(settingsFragment)
                 .add(R.id.fragmentContainer, playlistDetailFragment, "playlist_detail").hide(playlistDetailFragment)
+                .add(R.id.fullPlayerContainer, fullPlayerFragment, "full_player").hide(fullPlayerFragment)
                 .commit()
         } else {
             discoverFragment = supportFragmentManager.findFragmentByTag("discover") as DiscoverFragment
@@ -139,6 +143,7 @@ class MainActivity : AppCompatActivity() {
             downloadsFragment = supportFragmentManager.findFragmentByTag("downloads") as DownloadsFragment
             settingsFragment = supportFragmentManager.findFragmentByTag("settings") as SettingsFragment
             playlistDetailFragment = supportFragmentManager.findFragmentByTag("playlist_detail") as PlaylistDetailFragment
+            fullPlayerFragment = supportFragmentManager.findFragmentByTag("full_player") as FullPlayerFragment
         }
     }
 
@@ -179,6 +184,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupMiniPlayer() {
+        binding.miniPlayer.setOnClickListener {
+            showFullPlayer()
+        }
+        
         binding.miniPlayerPlayPause.setOnClickListener {
             PlayerManager.togglePlayPause()
         }
@@ -223,6 +232,48 @@ class MainActivity : AppCompatActivity() {
                 .hide(playlistDetailFragment).show(playlistsFragment).commit()
             binding.bottomNav.selectedItemId = R.id.nav_playlists
         }
+        
+        fullPlayerFragment.onBack = {
+            hideFullPlayer()
+        }
+        
+        fullPlayerFragment.onDownload = { track ->
+            discoverFragment.triggerDownload(track)
+        }
+    }
+
+    private fun showFullPlayer() {
+        binding.miniPlayer.visibility = View.GONE
+        binding.bottomNav.visibility = View.GONE
+        binding.fullPlayerContainer.visibility = View.VISIBLE
+        supportFragmentManager.beginTransaction()
+            .setCustomAnimations(R.anim.slide_in_up, R.anim.slide_out_down)
+            .show(fullPlayerFragment)
+            .commit()
+    }
+
+    private fun hideFullPlayer() {
+        supportFragmentManager.beginTransaction()
+            .setCustomAnimations(R.anim.slide_in_up, R.anim.slide_out_down)
+            .hide(fullPlayerFragment)
+            .commitNow()
+        
+        binding.fullPlayerContainer.visibility = View.GONE
+        
+        if (PlayerManager.currentQueue.isNotEmpty() && PlayerManager.currentIndex != -1) {
+            binding.miniPlayer.visibility = View.VISIBLE
+        }
+        binding.bottomNav.visibility = View.VISIBLE
+    }
+
+    override fun onBackPressed() {
+        if (binding.fullPlayerContainer.visibility == View.VISIBLE) {
+            hideFullPlayer()
+        } else if (playlistDetailFragment.isVisible) {
+            playlistDetailFragment.onBack?.invoke()
+        } else {
+            super.onBackPressed()
+        }
     }
 
     private fun openPlaylistDetail(playlist: PlaylistEntity) {
@@ -246,7 +297,9 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateMiniPlayer(track: Track) {
         runOnUiThread {
-            binding.miniPlayer.visibility = View.VISIBLE
+            if (binding.fullPlayerContainer.visibility != View.VISIBLE) {
+                binding.miniPlayer.visibility = View.VISIBLE
+            }
             binding.miniPlayerTitle.text = track.name
             binding.miniPlayerArtist.text = track.artistName
             if (track.image.isNotEmpty()) {

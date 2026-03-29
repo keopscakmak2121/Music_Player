@@ -21,6 +21,8 @@ object PlayerManager {
                 generateShuffledIndices()
             }
         }
+    
+    var repeatMode: Boolean = false
 
     var currentQueue: List<Track> = emptyList()
     var currentIndex: Int = -1
@@ -62,7 +64,11 @@ object PlayerManager {
             override fun onPlaybackStateChanged(state: Int) {
                 if (state == Player.STATE_ENDED) {
                     retryCount = 0
-                    playNext()
+                    if (repeatMode) {
+                        resolveAndPlay(currentQueue[currentIndex])
+                    } else {
+                        playNext()
+                    }
                 }
                 updatePlaybackState()
             }
