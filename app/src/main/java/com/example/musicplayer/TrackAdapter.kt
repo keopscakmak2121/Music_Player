@@ -20,6 +20,7 @@ class TrackAdapter(
     private val onTrackClick: (Track) -> Unit,
     private val onDownloadClick: (Track, Int) -> Unit,
     private val onPlayClick: (Track, Int) -> Unit,
+    private val onAddToPlaylistClick: (Track) -> Unit,
     private val onLongClick: ((Track) -> Unit)? = null,
     private val onCancelDownload: ((Long) -> Unit)? = null,
     private val onSelectionChanged: ((Int) -> Unit)? = null
@@ -27,6 +28,7 @@ class TrackAdapter(
 
     private val downloadMap = mutableMapOf<Long, Int>()
     private val progressMap = mutableMapOf<Int, Int>()
+    private val playlistMap = mutableMapOf<Int, Boolean>() // Pozisyon -> Listede mi?
     private var playingPosition: Int = -1
     private var isLoadingMore = false
 
@@ -92,6 +94,19 @@ class TrackAdapter(
                 if (selectionMode) return@setOnClickListener
                 onDownloadClick(track, position)
             }
+
+            btnAddToPlaylist.setOnClickListener {
+                if (selectionMode) return@setOnClickListener
+                onAddToPlaylistClick(track)
+            }
+
+            // Listede mi kontrolü
+            val isInPlaylist = playlistMap[position] ?: false
+            btnAddToPlaylist.setImageResource(
+                if (isInPlaylist) android.R.drawable.checkbox_on_background 
+                else android.R.drawable.ic_menu_add
+            )
+            btnAddToPlaylist.isEnabled = !isInPlaylist
         }
         bindPlayingState(holder.binding, position)
         bindDownloadState(holder.binding, position)
@@ -185,6 +200,17 @@ class TrackAdapter(
     fun isDownloaded(position: Int): Boolean = progressMap[position] == -1
     fun cancelDownload(position: Int) { progressMap.remove(position); notifyItemChanged(position) }
     fun positionForFakeId(fakeId: Long) = downloadMap[fakeId]
+
+    fun markInPlaylist(position: Int) {
+        playlistMap[position] = true
+        notifyItemChanged(position)
+    }
+
+    fun setPlaylistMap(map: Map<Int, Boolean>) {
+        playlistMap.clear()
+        playlistMap.putAll(map)
+        notifyDataSetChanged()
+    }
 
     private fun formatDuration(seconds: Int): String = "%d:%02d".format(seconds / 60, seconds % 60)
 }

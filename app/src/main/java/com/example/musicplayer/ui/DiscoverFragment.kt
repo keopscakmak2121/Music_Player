@@ -19,6 +19,7 @@ import android.view.inputmethod.EditorInfo
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.asLiveData
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -28,6 +29,8 @@ import com.example.musicplayer.api.InvidiousVideoInfo
 import com.example.musicplayer.api.SearchResponse
 import com.example.musicplayer.api.YouTubeApi
 import com.example.musicplayer.databinding.FragmentDiscoverBinding
+import com.example.musicplayer.db.AppDatabase
+import com.example.musicplayer.db.PlaylistSongEntity
 import com.example.musicplayer.model.Track
 import com.example.musicplayer.util.FileUtils
 import kotlinx.coroutines.Dispatchers
@@ -129,12 +132,18 @@ class DiscoverFragment : Fragment() {
 
     override fun onResume() {
         super.onResume()
-        if (currentTracks.isNotEmpty()) syncDownloadedState()
+        if (currentTracks.isNotEmpty()) {
+            syncDownloadedState()
+            syncPlaylistState()
+        }
     }
 
     override fun onHiddenChanged(hidden: Boolean) {
         super.onHiddenChanged(hidden)
-        if (!hidden && currentTracks.isNotEmpty()) syncDownloadedState()
+        if (!hidden && currentTracks.isNotEmpty()) {
+            syncDownloadedState()
+            syncPlaylistState()
+        }
     }
 
     fun updatePlayingPosition(index: Int) {
@@ -181,6 +190,22 @@ class DiscoverFragment : Fragment() {
                         if (currentState) trackAdapter?.cancelDownload(index)
                     }
                 }
+            }
+        }
+    }
+
+    private fun syncPlaylistState() {
+        if (!isAdded || trackAdapter == null) return
+        lifecycleScope.launch(Dispatchers.IO) {
+            val db = AppDatabase.getInstance(requireContext())
+            val playlistMap = mutableMapOf<Int, Boolean>()
+            currentTracks.forEachIndexed { index, track ->
+                // Herhangi bir listede var mı?
+                val count = db.playlistSongDao().isSongInAnyPlaylist(track.id)
+                if (count > 0) playlistMap[index] = true
+            }
+            withContext(Dispatchers.Main) {
+                trackAdapter?.setPlaylistMap(playlistMap)
             }
         }
     }
@@ -296,6 +321,7 @@ class DiscoverFragment : Fragment() {
                                 PlayerManager.playQueue(currentTracks.toList(), pos)
                             }
                         },
+                        onAddToPlaylistClick = { track -> showAddToPlaylistDialog(track) },
                         onLongClick = { track -> },
                         onCancelDownload = { fakeId -> cancelDownloadByFakeId(fakeId) },
                         onSelectionChanged = { count ->
@@ -310,12 +336,14 @@ class DiscoverFragment : Fragment() {
                     )
                     binding.rvTracks.adapter = trackAdapter
                     syncDownloadedState(0)
+                    syncPlaylistState()
                 } else {
                     if (newTracks.isNotEmpty()) {
                         val startPos = currentTracks.size
                         currentTracks.addAll(newTracks)
                         trackAdapter?.notifyItemRangeInserted(startPos, newTracks.size)
                         syncDownloadedState(startPos)
+                        syncPlaylistState()
                     } else {
                         hasMore = false
                     }
@@ -345,12 +373,56 @@ class DiscoverFragment : Fragment() {
         }.show()
     }
 
+    private fun showAddToPlaylistDialog(track: Track) {
+        val db = AppDatabase.getInstance(requireContext())
+        db.playlistDao().getAllPlaylists().asLiveData().observe(viewLifecycleOwner) { playlists ->
+            if (playlists.isEmpty()) {
+                Toast.makeText(context, "Henüz liste oluşturmadınız.", Toast.LENGTH_SHORT).show()
+                return@observe
+            }
+            val names = playlists.map { it.name }.toTypedArray()
+            AlertDialog.Builder(requireContext())
+                .setTitle("Listeye Ekle")
+                .setItems(names) { _, which ->
+                    val selectedPlaylist = playlists[which]
+                    lifecycleScope.launch(Dispatchers.IO) {
+                        val exists = db.playlistSongDao().isSongInPlaylist(selectedPlaylist.id, track.id)
+                        if (exists > 0) {
+                            withContext(Dispatchers.Main) {
+                                Toast.makeText(context, "Bu şarkı zaten listede var.", Toast.LENGTH_SHORT).show()
+                            }
+                        } else {
+                            db.playlistSongDao().insertSong(
+                                PlaylistSongEntity(
+                                    playlistId = selectedPlaylist.id,
+                                    videoId = track.id,
+                                    title = track.name,
+                                    author = track.artistName,
+                                    thumbnail = track.image,
+                                    duration = track.duration
+                                )
+                            )
+                            withContext(Dispatchers.Main) {
+                                val position = currentTracks.indexOfFirst { it.id == track.id }
+                                if (position >= 0) trackAdapter?.markInPlaylist(position)
+                                
+                                Toast.makeText(context, "Listeye eklendi ve indiriliyor.", Toast.LENGTH_SHORT).show()
+                                triggerDownload(track)
+                            }
+                        }
+                    }
+                }
+                .show()
+        }
+    }
+
     fun triggerDownload(track: Track) {
         val position = currentTracks.indexOfFirst { it.id == track.id }
         if (position >= 0) {
-            showDownloadOptions(track, position)
+            if (!trackAdapter!!.isDownloaded(position) && !activeDownloads.containsKey(track.id)) {
+                startDownload(track, position, "mp3", null)
+            }
         } else {
-            // Şarkı listede yoksa bile varsayılan olarak MP3 indir
             startDownload(track, -1, "mp3", null)
         }
     }

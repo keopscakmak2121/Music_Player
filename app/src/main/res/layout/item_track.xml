@@ -43,7 +43,7 @@
             app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintBottom_toBottomOf="parent" />
 
-        <!-- Şarkı adı: Sola albüm kapağına yaslı, sağa ise en sağdaki butona kadar gider -->
+        <!-- Şarkı adı -->
         <TextView
             android:id="@+id/tvTrackName"
             android:layout_width="0dp"
@@ -55,7 +55,7 @@
             android:textColor="@color/text_primary"
             android:textSize="14sp"
             android:textStyle="bold"
-            app:layout_constraintEnd_toStartOf="@+id/btnPlay"
+            app:layout_constraintEnd_toStartOf="@+id/btnAddToPlaylist"
             app:layout_constraintStart_toEndOf="@+id/ivAlbumArt"
             app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintBottom_toTopOf="@+id/tvArtistName"
@@ -85,7 +85,7 @@
             android:layout_marginEnd="8dp"
             android:textColor="@color/text_hint"
             android:textSize="11sp"
-            app:layout_constraintEnd_toStartOf="@+id/btnPlay"
+            app:layout_constraintEnd_toStartOf="@+id/btnAddToPlaylist"
             app:layout_constraintTop_toBottomOf="@+id/tvTrackName" />
 
         <!-- Progress -->
@@ -97,7 +97,7 @@
             android:layout_marginTop="7dp"
             android:layout_marginEnd="8dp"
             android:visibility="gone"
-            app:layout_constraintEnd_toStartOf="@+id/btnPlay"
+            app:layout_constraintEnd_toStartOf="@+id/btnAddToPlaylist"
             app:layout_constraintStart_toStartOf="@+id/tvTrackName"
             app:layout_constraintTop_toBottomOf="@+id/tvArtistName" />
 
@@ -112,28 +112,42 @@
             app:layout_constraintStart_toStartOf="@+id/tvTrackName"
             app:layout_constraintTop_toBottomOf="@+id/downloadProgress" />
 
-        <!-- Play butonu (Görünürlüğü kodla GONE yapılacak) -->
+        <!-- Listeye Ekle Butonu -->
+        <ImageButton
+            android:id="@+id/btnAddToPlaylist"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_marginEnd="4dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@android:drawable/ic_menu_add"
+            app:tint="#8A84BB"
+            android:padding="6dp"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toStartOf="@+id/btnPlay"
+            app:layout_constraintTop_toTopOf="parent" />
+
+        <!-- Play butonu -->
         <ImageButton
             android:id="@+id/btnPlay"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
             android:layout_marginEnd="4dp"
             android:background="@drawable/bg_play_button"
             android:src="@android:drawable/ic_media_play"
-            android:tint="@color/white"
+            app:tint="@color/white"
             android:padding="8dp"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toStartOf="@+id/btnDownload"
             app:layout_constraintTop_toTopOf="parent" />
 
-        <!-- Sil/İndir butonu (Her zaman en sağda çıpa olarak durur) -->
+        <!-- İndir butonu -->
         <ImageButton
             android:id="@+id/btnDownload"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
             android:background="@drawable/bg_download_button"
-            android:src="@android:drawable/ic_menu_save"
-            android:tint="@color/accent"
+            android:src="@android:drawable/stat_sys_download"
+            app:tint="@color/accent"
             android:padding="8dp"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
