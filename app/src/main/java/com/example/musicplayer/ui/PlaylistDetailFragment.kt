@@ -1,19 +1,18 @@
 package com.example.musicplayer.ui
 
 import android.content.Context
-import android.os.Build
 import android.os.Bundle
-import android.os.Environment
-import android.provider.MediaStore
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
+import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.musicplayer.PlayerManager
 import com.example.musicplayer.PlayMode
+import com.example.musicplayer.R
 import com.example.musicplayer.adapter.PlaylistSongAdapter
 import com.example.musicplayer.api.InvidiousVideoInfo
 import com.example.musicplayer.api.YouTubeApi
@@ -21,6 +20,7 @@ import com.example.musicplayer.databinding.FragmentPlaylistDetailBinding
 import com.example.musicplayer.db.AppDatabase
 import com.example.musicplayer.db.PlaylistSongEntity
 import com.example.musicplayer.model.Track
+import com.example.musicplayer.util.FileUtils
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
@@ -29,7 +29,6 @@ import retrofit2.Callback
 import retrofit2.Response
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
-import java.io.File
 import java.util.concurrent.TimeUnit
 
 class PlaylistDetailFragment : Fragment() {
@@ -81,7 +80,7 @@ class PlaylistDetailFragment : Fragment() {
                 if (track.id == currentPlayingId) {
                     PlayerManager.togglePlayPause()
                 } else {
-                    val localUri = findLocalUri(track.name)
+                    val localUri = FileUtils.findLocalUri(requireContext(), track.name)
                     if (localUri != null) {
                         play(songList.map { it.toTrack() }, localUri, index)
                     } else {
@@ -108,7 +107,7 @@ class PlaylistDetailFragment : Fragment() {
         binding.btnPlayAll.setOnClickListener {
             if (songList.isEmpty()) return@setOnClickListener
             val track = songList[0].toTrack()
-            val localUri = findLocalUri(track.name)
+            val localUri = FileUtils.findLocalUri(requireContext(), track.name)
             if (localUri != null) {
                 play(songList.map { it.toTrack() }, localUri, 0)
             } else {
@@ -136,18 +135,18 @@ class PlaylistDetailFragment : Fragment() {
     }
 
     private fun updatePlayModeUI() {
-        val selectedColor = android.graphics.Color.parseColor("#7C6FFF")
-        val inactiveColor = android.graphics.Color.parseColor("#22223A")
+        val selectedColor = ContextCompat.getColor(requireContext(), R.color.accent)
+        val inactiveColor = ContextCompat.getColor(requireContext(), R.color.bg_elevated)
         val isSeq = PlayerManager.playMode == PlayMode.SEQUENTIAL
 
         binding.btnModeSequential.apply {
             backgroundTintList = android.content.res.ColorStateList.valueOf(if (isSeq) selectedColor else inactiveColor)
-            setTextColor(if (isSeq) android.graphics.Color.WHITE else android.graphics.Color.parseColor("#9999BB"))
+            setTextColor(if (isSeq) ContextCompat.getColor(context, R.color.white) else ContextCompat.getColor(context, R.color.text_secondary))
             text = if (isSeq) "✓ SIRALI" else "SIRALI"
         }
         binding.btnModeShuffle.apply {
             backgroundTintList = android.content.res.ColorStateList.valueOf(if (!isSeq) selectedColor else inactiveColor)
-            setTextColor(if (!isSeq) android.graphics.Color.WHITE else android.graphics.Color.parseColor("#9999BB"))
+            setTextColor(if (!isSeq) ContextCompat.getColor(context, R.color.white) else ContextCompat.getColor(context, R.color.text_secondary))
             text = if (!isSeq) "✓ KARIŞIK" else "🔀 KARIŞIK"
         }
     }
@@ -156,25 +155,6 @@ class PlaylistDetailFragment : Fragment() {
         PlayerManager.urlResolver = { _, cb -> cb(url) }
         PlayerManager.playQueue(tracks, index)
         songAdapter.setPlayingPosition(index)
-    }
-
-    private fun findLocalUri(name: String): String? {
-        val ctx = context ?: return null
-        val safeName = name.take(50).replace(Regex("[/\\\\:*?\"<>|]"), "_").trim()
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                val projection = arrayOf(MediaStore.MediaColumns._ID)
-                val selection = "${MediaStore.MediaColumns.DISPLAY_NAME} LIKE ?"
-                val args = arrayOf("%$safeName%")
-                ctx.contentResolver.query(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, projection, selection, args, null)?.use { c ->
-                    if (c.moveToFirst()) return android.content.ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, c.getLong(0)).toString()
-                }
-            } else {
-                val mp3 = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC), "Melodify/$safeName.mp3")
-                if (mp3.exists()) return mp3.absolutePath
-            }
-        } catch (e: Exception) {}
-        return null
     }
 
     fun loadPlaylistSongs() {
@@ -193,7 +173,7 @@ class PlaylistDetailFragment : Fragment() {
 
     private fun setupRetrofit() {
         val client = OkHttpClient.Builder().connectTimeout(30, TimeUnit.SECONDS).build()
-        youtubeApi = Retrofit.Builder().baseUrl("http://77.92.154.224:5050/").client(client).addConverterFactory(GsonConverterFactory.create()).build().create(YouTubeApi::class.java)
+        youtubeApi = Retrofit.Builder().baseUrl(DiscoverFragment.BASE_URL).client(client).addConverterFactory(GsonConverterFactory.create()).build().create(YouTubeApi::class.java)
     }
 
     private fun resolveAndPlay(track: Track, callback: (String) -> Unit) {

@@ -28,13 +28,11 @@ import com.example.musicplayer.api.InvidiousVideoInfo
 import com.example.musicplayer.api.SearchResponse
 import com.example.musicplayer.api.YouTubeApi
 import com.example.musicplayer.databinding.FragmentDiscoverBinding
-import com.example.musicplayer.db.AppDatabase
-import com.example.musicplayer.db.PlaylistSongEntity
 import com.example.musicplayer.model.Track
+import com.example.musicplayer.util.FileUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import okhttp3.ConnectionPool
 import okhttp3.OkHttpClient
@@ -79,10 +77,6 @@ class DiscoverFragment : Fragment() {
         private const val TAG = "MelodifySearch"
         const val BASE_URL = "http://77.92.154.224:5050/"
         private const val NOTIF_CHANNEL = "melodify_downloads"
-        
-        fun getSafeFileName(name: String): String {
-            return name.take(50).replace(Regex("[/\\\\:*?\"<>|]"), "_").trim()
-        }
     }
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
@@ -120,7 +114,7 @@ class DiscoverFragment : Fragment() {
 
         // PlayerManager'a dinamik URL çözücü ata
         PlayerManager.urlResolver = { track, callback ->
-            val localUri = findLocalUri(track)
+            val localUri = FileUtils.findLocalUri(requireContext(), track.name)
             if (localUri != null) {
                 callback(localUri)
             } else {
@@ -147,35 +141,6 @@ class DiscoverFragment : Fragment() {
         trackAdapter?.setPlayingPosition(index)
     }
 
-    private fun findLocalUri(track: Track): String? {
-        val ctx = context ?: return null
-        val safeName = getSafeFileName(track.name)
-
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                val projection = arrayOf(MediaStore.MediaColumns._ID)
-                val selection = "${MediaStore.MediaColumns.DISPLAY_NAME} LIKE ?"
-                val args = arrayOf("%$safeName%")
-                
-                ctx.contentResolver.query(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, projection, selection, args, null)?.use { c ->
-                    if (c.moveToFirst()) return android.content.ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, c.getLong(0)).toString()
-                }
-                ctx.contentResolver.query(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, projection, selection, args, null)?.use { c ->
-                    if (c.moveToFirst()) return android.content.ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, c.getLong(0)).toString()
-                }
-                ctx.contentResolver.query(MediaStore.Downloads.EXTERNAL_CONTENT_URI, projection, selection, args, null)?.use { c ->
-                    if (c.moveToFirst()) return android.content.ContentUris.withAppendedId(MediaStore.Downloads.EXTERNAL_CONTENT_URI, c.getLong(0)).toString()
-                }
-            } else {
-                val mp3 = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC), "Melodify/$safeName.mp3")
-                if (mp3.exists()) return mp3.absolutePath
-                val mp4 = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "Melodify/$safeName.mp4")
-                if (mp4.exists()) return mp4.absolutePath
-            }
-        } catch (e: Exception) { Log.e(TAG, "findLocalUri error", e) }
-        return null
-    }
-
     private fun syncDownloadedState(fromIndex: Int = 0) {
         if (!isAdded || _binding == null) return
         val tracksToSync = currentTracks.toList()
@@ -189,11 +154,11 @@ class DiscoverFragment : Fragment() {
                 val track = tracksToSync[i]
                 if (activeDownloads.containsKey(track.id)) continue
                 
-                val safeName = getSafeFileName(track.name)
+                val safeName = FileUtils.getSafeFileName(track.name)
                 val isDownloaded = downloadedNames.any { it.contains(safeName, true) }
                 
                 if (isDownloaded) {
-                    val uri = findLocalUri(track)
+                    val uri = FileUtils.findLocalUri(requireContext(), track.name)
                     if (uri != null) updates.add(Triple(i, uri, true))
                     else updates.add(Triple(i, "", false))
                 } else {
@@ -256,13 +221,12 @@ class DiscoverFragment : Fragment() {
     }
 
     private fun setupDownloadClient() {
-        // İndirme için optimize edilmiş OkHttp istemcisi
         downloadClient = OkHttpClient.Builder()
             .connectTimeout(10, TimeUnit.SECONDS)
             .readTimeout(10, TimeUnit.MINUTES)
             .writeTimeout(10, TimeUnit.MINUTES)
             .retryOnConnectionFailure(true)
-            .connectionPool(ConnectionPool(10, 5, TimeUnit.MINUTES)) // Daha fazla boşta bağlantı tut
+            .connectionPool(ConnectionPool(10, 5, TimeUnit.MINUTES))
             .build()
     }
 
@@ -403,7 +367,7 @@ class DiscoverFragment : Fragment() {
 
     private fun startDownload(track: Track, position: Int, format: String, quality: String?) {
         val ext = if (format == "mp3") "mp3" else "mp4"
-        val safeName = getSafeFileName(track.name)
+        val safeName = FileUtils.getSafeFileName(track.name)
         val fileName = "$safeName.$ext"
         var url = "${BASE_URL}download/${track.id}?format=$format"
         if (quality != null) url += "&quality=$quality"
@@ -460,7 +424,6 @@ class DiscoverFragment : Fragment() {
                 nm?.notify(notifId, notifBuilder.build())
 
                 outputStream?.use { out ->
-                    // BUFFER BOYUTUNU ARTIRDIK: 64KB -> 128KB (Daha hızlı yazma)
                     val buf = ByteArray(128 * 1024)
                     var downloaded = 0L
                     body.byteStream().use { inp ->
@@ -471,12 +434,8 @@ class DiscoverFragment : Fragment() {
                             out.write(buf, 0, read)
                             downloaded += read
                             
-                            // ARAYÜZ GÜNCELLEME SIKLIĞINI AZALTTIK: 
-                            // Saniyeler içinde yüzlerce kez UI güncellemek hızı yavaşlatır.
-                            // Sadece her %1'lik değişimde veya belli bir miktar veride güncelle.
                             if (totalBytes > 0) {
                                 val pct = ((downloaded * 100) / totalBytes).toInt()
-                                // Sadece 100ms'de bir veya %1 değişince UI güncellemesi yapmak performansı artırır.
                                 withContext(Dispatchers.Main) { 
                                     trackAdapter?.updateProgress(fakeId, pct) 
                                 }
@@ -537,7 +496,7 @@ class DiscoverFragment : Fragment() {
 
     fun resetDownloadByPath(deletedFileName: String) {
         val position = currentTracks.indexOfFirst { track ->
-            val safeName = getSafeFileName(track.name)
+            val safeName = FileUtils.getSafeFileName(track.name)
             safeName == deletedFileName
         }
         if (position >= 0) {

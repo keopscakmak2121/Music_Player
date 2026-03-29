@@ -4,9 +4,8 @@ import android.graphics.Color
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
-import coil.load
-import coil.transform.RoundedCornersTransformation
 import com.example.musicplayer.R
 import com.example.musicplayer.databinding.ItemDownloadedTrackBinding
 
@@ -32,23 +31,22 @@ class DownloadedTrackAdapter(
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         val file = files[position]
         val isSelected = selectedPositions.contains(position)
+        val context = holder.itemView.context
         
         holder.binding.apply {
             tvFileName.text = file.name
             tvFileSize.text = formatSize(file.size)
 
-            // Şarkı resmi yerine Play ikonu yapıldı
             ivMusicIcon.setImageResource(android.R.drawable.ic_media_play)
-            ivMusicIcon.setColorFilter(Color.parseColor("#7C6FFF"))
-            ivMusicIcon.setPadding(12, 12, 12, 12) // İkonun çok büyük görünmemesi için
+            ivMusicIcon.setColorFilter(ContextCompat.getColor(context, R.color.accent))
+            ivMusicIcon.setPadding(12, 12, 12, 12)
 
-            // Tasarım güncellemeleri
             root.setCardBackgroundColor(
-                if (isSelected) Color.parseColor("#2A1E4A")
-                else Color.parseColor("#13131F")
+                if (isSelected) ContextCompat.getColor(context, R.color.bg_elevated)
+                else ContextCompat.getColor(context, R.color.bg_card)
             )
             root.strokeWidth = if (isSelected) 3 else 0
-            root.strokeColor = Color.parseColor("#7C6FFF")
+            root.strokeColor = ContextCompat.getColor(context, R.color.accent)
 
             checkBox.visibility = if (selectionMode) View.VISIBLE else View.GONE
             checkBox.isChecked = isSelected

@@ -11,11 +11,13 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
+import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.musicplayer.PlayMode
 import com.example.musicplayer.PlayerManager
+import com.example.musicplayer.R
 import com.example.musicplayer.databinding.FragmentDownloadsBinding
 import com.example.musicplayer.db.AppDatabase
 import com.example.musicplayer.db.PlaylistSongEntity
@@ -85,8 +87,9 @@ class DownloadsFragment : Fragment() {
     }
 
     private fun updatePlayModeUI() {
-        val selectedColor = android.graphics.Color.parseColor("#7C6FFF")
-        val inactiveColor = android.graphics.Color.parseColor("#22223A")
+        if (!isAdded) return
+        val selectedColor = ContextCompat.getColor(requireContext(), R.color.accent)
+        val inactiveColor = ContextCompat.getColor(requireContext(), R.color.bg_elevated)
         val isSeq = PlayerManager.playMode == PlayMode.SEQUENTIAL
 
         binding.btnModeSequential.apply {
@@ -100,8 +103,9 @@ class DownloadsFragment : Fragment() {
     }
 
     private fun updateTabUI() {
-        val accentColor = android.graphics.Color.parseColor("#7C6FFF")
-        val inactiveColor = android.graphics.Color.parseColor("#22223A")
+        if (!isAdded) return
+        val accentColor = ContextCompat.getColor(requireContext(), R.color.accent)
+        val inactiveColor = ContextCompat.getColor(requireContext(), R.color.bg_elevated)
         binding.btnTabMp3.backgroundTintList = android.content.res.ColorStateList.valueOf(if (!showingVideo) accentColor else inactiveColor)
         binding.btnTabVideo.backgroundTintList = android.content.res.ColorStateList.valueOf(if (showingVideo) accentColor else inactiveColor)
     }
@@ -119,7 +123,7 @@ class DownloadsFragment : Fragment() {
 
     fun loadDownloadedFiles() {
         if (!isAdded || _binding == null) return
-        lifecycleScope.launch {
+        viewLifecycleOwner.lifecycleScope.launch {
             allFiles = withContext(Dispatchers.IO) { queryMelodifyFiles() }
             filterAndShow()
         }
@@ -168,7 +172,7 @@ class DownloadsFragment : Fragment() {
 
     private fun showAddToPlaylistBatchDialog(selectedFiles: List<LocalFile>) {
         val db = AppDatabase.getInstance(requireContext())
-        lifecycleScope.launch {
+        viewLifecycleOwner.lifecycleScope.launch {
             val playlists = db.playlistDao().getAllPlaylists().first()
             if (playlists.isEmpty()) {
                 Toast.makeText(requireContext(), "Önce playlist oluşturun", Toast.LENGTH_SHORT).show()
@@ -179,7 +183,7 @@ class DownloadsFragment : Fragment() {
                 .setTitle("${selectedFiles.size} şarkı eklenecek liste:")
                 .setItems(names) { _, index ->
                     val playlist = playlists[index]
-                    lifecycleScope.launch {
+                    viewLifecycleOwner.lifecycleScope.launch {
                         selectedFiles.forEach { file ->
                             db.playlistSongDao().insertSong(
                                 PlaylistSongEntity(
@@ -206,7 +210,7 @@ class DownloadsFragment : Fragment() {
             .setTitle("Toplu Sil")
             .setMessage("${selected.size} dosya silinsin mi?")
             .setPositiveButton("Sil") { _, _ ->
-                lifecycleScope.launch {
+                viewLifecycleOwner.lifecycleScope.launch {
                     withContext(Dispatchers.IO) {
                         selected.forEach { file ->
                             try {
@@ -224,10 +228,9 @@ class DownloadsFragment : Fragment() {
 
     private fun queryMelodifyFiles(): List<LocalFile> {
         val result = mutableListOf<LocalFile>()
-        val ctx = requireContext()
+        val ctx = context ?: return emptyList()
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                // Müzik ve Download klasörlerindeki tüm dosyaları esnek şekilde tara
                 val collections = listOf(
                     MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
                     MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
@@ -254,7 +257,6 @@ class DownloadsFragment : Fragment() {
                             val path = if (pathCol != -1) cursor.getString(pathCol) ?: "" else ""
                             val name = cursor.getString(nameCol) ?: ""
                             
-                            // Sadece Melodify klasöründekileri al
                             if (path.contains("Melodify", ignoreCase = true)) {
                                 val id = cursor.getLong(idCol)
                                 val size = cursor.getLong(sizeCol)
@@ -268,7 +270,6 @@ class DownloadsFragment : Fragment() {
                     }
                 }
             } else {
-                // Android 9- ve altı için klasör bazlı tarama
                 listOf(
                     File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC), "Melodify"),
                     File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "Melodify")
@@ -281,13 +282,13 @@ class DownloadsFragment : Fragment() {
                 }
             }
         } catch (e: Exception) {}
-        return result.distinctBy { it.path } // Aynı dosyayı mükerrer ekleme
+        return result.distinctBy { it.path }
     }
 
     private fun confirmDelete(file: LocalFile) {
         AlertDialog.Builder(requireContext()).setTitle("Sil").setMessage("${file.name} silinsin mi?")
             .setPositiveButton("Sil") { _, _ ->
-                lifecycleScope.launch {
+                viewLifecycleOwner.lifecycleScope.launch {
                     val ok = withContext(Dispatchers.IO) {
                         try {
                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) requireContext().contentResolver.delete(file.uri, null, null) > 0

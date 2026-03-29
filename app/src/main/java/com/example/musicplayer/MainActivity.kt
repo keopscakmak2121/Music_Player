@@ -57,11 +57,25 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private val playbackStateListener: (Boolean) -> Unit = { isPlaying ->
+        runOnUiThread {
+            binding.miniPlayerPlayPause.setImageResource(
+                if (isPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play
+            )
+        }
+    }
+
     private val requestPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { isGranted: Boolean ->
-        if (!isGranted) {
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val postNotifGranted = permissions[Manifest.permission.POST_NOTIFICATIONS] ?: true
+        val writeStorageGranted = permissions[Manifest.permission.WRITE_EXTERNAL_STORAGE] ?: true
+        
+        if (!postNotifGranted) {
             Toast.makeText(this, "Bildirim izni verilmedi.", Toast.LENGTH_SHORT).show()
+        }
+        if (!writeStorageGranted) {
+            Toast.makeText(this, "Depolama izni verilmedi. İndirmeler çalışmayabilir.", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -81,12 +95,26 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun checkPermissions() {
+        val permissionsToRequest = mutableListOf<String>()
+        
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) !=
                 PackageManager.PERMISSION_GRANTED
             ) {
-                requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                permissionsToRequest.add(Manifest.permission.POST_NOTIFICATIONS)
             }
+        }
+        
+        if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) !=
+                PackageManager.PERMISSION_GRANTED
+            ) {
+                permissionsToRequest.add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+            }
+        }
+
+        if (permissionsToRequest.isNotEmpty()) {
+            requestPermissionLauncher.launch(permissionsToRequest.toTypedArray())
         }
     }
 
@@ -146,13 +174,7 @@ class MainActivity : AppCompatActivity() {
                 discoverFragment.updatePlayingPosition(index)
                 playlistDetailFragment.updatePlayingPosition(index)
             }
-            PlayerManager.addPlaybackStateListener { isPlaying ->
-                runOnUiThread {
-                    binding.miniPlayerPlayPause.setImageResource(
-                        if (isPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play
-                    )
-                }
-            }
+            PlayerManager.addPlaybackStateListener(playbackStateListener)
         }, MoreExecutors.directExecutor())
     }
 
@@ -238,6 +260,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        PlayerManager.removePlaybackStateListener(playbackStateListener)
         mainHandler.removeCallbacks(updateProgressRunnable)
         controllerFuture?.let { MediaController.releaseFuture(it) }
     }

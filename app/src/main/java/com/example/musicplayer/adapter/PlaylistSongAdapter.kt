@@ -3,11 +3,11 @@ package com.example.musicplayer.adapter
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
-import coil.load
-import coil.transform.RoundedCornersTransformation
+import com.example.musicplayer.R
 import com.example.musicplayer.databinding.ItemTrackBinding
 import com.example.musicplayer.db.PlaylistSongEntity
 import com.example.musicplayer.PlayerManager
@@ -41,6 +41,7 @@ class PlaylistSongAdapter(
         val song = getItem(position)
         val isThisTrack = position == playingPosition
         val isActuallyPlaying = isThisTrack && PlayerManager.isPlaying()
+        val context = holder.itemView.context
 
         holder.binding.apply {
             tvTrackName.text = song.title
@@ -51,24 +52,23 @@ class PlaylistSongAdapter(
             downloadProgress.visibility = View.GONE
             tvDownloadPercent.visibility = View.GONE
 
-            // Playlist şarkı resmi yerine Play ikonu yapıldı
             ivAlbumArt.setImageResource(android.R.drawable.ic_media_play)
-            ivAlbumArt.setColorFilter(android.graphics.Color.parseColor("#7C6FFF"))
+            ivAlbumArt.setColorFilter(ContextCompat.getColor(context, R.color.accent))
             ivAlbumArt.setPadding(8, 8, 8, 8)
 
             if (isActuallyPlaying) {
                 root.strokeWidth = 2
-                root.strokeColor = android.graphics.Color.parseColor("#7C6FFF")
+                root.strokeColor = ContextCompat.getColor(context, R.color.accent)
             } else {
                 root.strokeWidth = if (isThisTrack) 2 else 0
-                root.strokeColor = if (isThisTrack) android.graphics.Color.parseColor("#444466") else 0
+                root.strokeColor = if (isThisTrack) ContextCompat.getColor(context, R.color.text_hint) else 0
             }
 
             root.setOnClickListener { onClick(song, position) }
             btnDownload.setImageResource(android.R.drawable.ic_menu_delete)
-            btnDownload.setColorFilter(android.graphics.Color.parseColor("#FF5555"))
+            btnDownload.setColorFilter(ContextCompat.getColor(context, R.color.error))
             btnDownload.setOnClickListener {
-                android.app.AlertDialog.Builder(holder.itemView.context)
+                android.app.AlertDialog.Builder(context)
                     .setTitle("Kaldır")
                     .setMessage("\"${song.title}\" listeden kaldırılsın mı?")
                     .setPositiveButton("Kaldır") { _, _ -> onRemove(song) }

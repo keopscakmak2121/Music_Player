@@ -3,6 +3,7 @@ package com.example.musicplayer
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
 import coil.load
 import coil.transform.RoundedCornersTransformation
@@ -55,6 +56,7 @@ class TrackAdapter(
         if (holder !is TrackViewHolder) return
         val track = tracks[position]
         val isSelected = selectedPositions.contains(position)
+        val context = holder.itemView.context
         
         holder.binding.apply {
             tvTrackName.text  = track.name
@@ -70,11 +72,11 @@ class TrackAdapter(
             checkBox.isChecked = isSelected
             
             root.setCardBackgroundColor(
-                if (isSelected) android.graphics.Color.parseColor("#2A1E4A")
-                else android.graphics.Color.parseColor("#13131F")
+                if (isSelected) ContextCompat.getColor(context, R.color.bg_elevated)
+                else ContextCompat.getColor(context, R.color.bg_card)
             )
             root.strokeWidth = if (isSelected || position == playingPosition) 3 else 0
-            root.strokeColor = android.graphics.Color.parseColor("#7C6FFF")
+            root.strokeColor = ContextCompat.getColor(context, R.color.accent)
 
             root.setOnClickListener {
                 if (selectionMode) toggleSelection(position)

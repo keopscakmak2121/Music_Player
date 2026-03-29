@@ -7,6 +7,8 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import com.example.musicplayer.model.Track
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 enum class PlayMode { SEQUENTIAL, SHUFFLE }
 
@@ -36,6 +38,12 @@ object PlayerManager {
     private const val MAX_RETRY = 1
     private val mainHandler = Handler(Looper.getMainLooper())
 
+    private val _isPlayingFlow = MutableStateFlow(false)
+    val isPlayingFlow = _isPlayingFlow.asStateFlow()
+
+    private val _currentTrackFlow = MutableStateFlow<Pair<Track?, Int>>(null to -1)
+    val currentTrackFlow = _currentTrackFlow.asStateFlow()
+
     private val playbackStateListeners = mutableListOf<(Boolean) -> Unit>()
 
     fun addPlaybackStateListener(listener: (Boolean) -> Unit) {
@@ -56,11 +64,11 @@ object PlayerManager {
                     retryCount = 0
                     playNext()
                 }
-                notifyListeners(isPlaying())
+                updatePlaybackState()
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
-                notifyListeners(isPlaying)
+                updatePlaybackState()
                 if (isPlaying) {
                     prefetchNextTrack()
                 }
@@ -84,7 +92,9 @@ object PlayerManager {
         })
     }
 
-    private fun notifyListeners(isPlaying: Boolean) {
+    private fun updatePlaybackState() {
+        val isPlaying = isPlaying()
+        _isPlayingFlow.value = isPlaying
         mainHandler.post {
             playbackStateListeners.forEach { it.invoke(isPlaying) }
         }
@@ -154,7 +164,6 @@ object PlayerManager {
         if (currentQueue.isEmpty() || currentIndex == -1) return
         
         val nextIdx = getNextIndex()
-        // Eğer geçerli bir sonraki indeks varsa ve şu anki şarkıdan farklıysa
         if (nextIdx != -1 && nextIdx != currentIndex && nextIdx < currentQueue.size) {
             val nextTrack = currentQueue[nextIdx]
             if (!urlCache.containsKey(nextTrack.id) && (nextTrack.audio.isEmpty() || nextTrack.audio.startsWith("http"))) {
@@ -189,6 +198,7 @@ object PlayerManager {
             c.setMediaItem(mediaItem)
             c.prepare()
             c.play()
+            _currentTrackFlow.value = track to currentIndex
             onTrackChanged?.invoke(track, currentIndex)
         }
     }
