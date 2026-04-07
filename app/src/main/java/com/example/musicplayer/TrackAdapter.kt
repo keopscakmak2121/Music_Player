@@ -86,7 +86,12 @@ class TrackAdapter(
             }
 
             root.setOnLongClickListener {
-                if (!selectionMode) { enterSelectionMode(); toggleSelection(position) }
+                if (!selectionMode) { 
+                    enterSelectionMode() 
+                    toggleSelection(position)
+                } else {
+                    onLongClick?.invoke(track)
+                }
                 true
             }
 
@@ -167,6 +172,8 @@ class TrackAdapter(
     }
 
     // --- Selection and Helper Methods ---
+    
+    // PRIVATE -> pozisyon ile seçim (iç kullanım)
     private fun toggleSelection(position: Int) {
         if (selectedPositions.contains(position)) selectedPositions.remove(position)
         else selectedPositions.add(position)
@@ -174,10 +181,37 @@ class TrackAdapter(
         onSelectionChanged?.invoke(selectedPositions.size)
         if (selectedPositions.isEmpty() && selectionMode) exitSelectionMode()
     }
+    
+    // PUBLIC -> videoId ile seçim (DiscoverFragment'tan çağrılacak)
+    fun toggleSelection(videoId: String) {
+        val position = tracks.indexOfFirst { it.id == videoId }
+        if (position != -1) {
+            if (!selectionMode) {
+                enterSelectionMode()
+            }
+            toggleSelection(position)
+        }
+    }
 
-    fun enterSelectionMode() { selectionMode = true; notifyDataSetChanged(); onSelectionChanged?.invoke(0) }
-    fun exitSelectionMode() { selectionMode = false; selectedPositions.clear(); notifyDataSetChanged(); onSelectionChanged?.invoke(-1) }
-    fun selectAll() { tracks.indices.forEach { selectedPositions.add(it) }; notifyDataSetChanged(); onSelectionChanged?.invoke(selectedPositions.size) }
+    fun enterSelectionMode() { 
+        selectionMode = true
+        notifyDataSetChanged()
+        onSelectionChanged?.invoke(selectedPositions.size)
+    }
+    
+    fun exitSelectionMode() { 
+        selectionMode = false
+        selectedPositions.clear()
+        notifyDataSetChanged()
+        onSelectionChanged?.invoke(-1)
+    }
+    
+    fun selectAll() { 
+        tracks.indices.forEach { selectedPositions.add(it) }
+        notifyDataSetChanged()
+        onSelectionChanged?.invoke(selectedPositions.size)
+    }
+    
     fun getSelectedTracks(): List<Track> = selectedPositions.sorted().mapNotNull { tracks.getOrNull(it) }
     fun setLoadingMore(loading: Boolean) { isLoadingMore = loading; notifyDataSetChanged() }
 
