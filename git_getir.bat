@@ -13,6 +13,13 @@ if not exist ".git" (
 
 REM Zaten repo varsa guncelle
 git fetch origin
+git status
+set /p confirm="Lokal degisiklikler silinecek, devam? (e/h): "
+if /i not "%confirm%"=="e" (
+    echo Iptal edildi.
+    pause
+    exit /b
+)
 git reset --hard origin/main
 git clean -fd
 

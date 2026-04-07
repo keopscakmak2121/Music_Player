@@ -3,6 +3,10 @@ package com.example.musicplayer.adapter
 import android.app.AlertDialog
 import android.view.LayoutInflater
 import android.view.ViewGroup
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
@@ -14,12 +18,11 @@ import com.example.musicplayer.db.PlaylistEntity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class PlaylistAdapter(
-    private val scope: CoroutineScope,
+    private val lifecycleOwner: LifecycleOwner,
     private val onClick: (PlaylistEntity) -> Unit,
     private val onDelete: (PlaylistEntity) -> Unit
 ) : ListAdapter<PlaylistEntity, PlaylistAdapter.VH>(DIFF) {
@@ -32,7 +35,7 @@ class PlaylistAdapter(
     }
 
     inner class VH(val binding: ItemPlaylistBinding) : RecyclerView.ViewHolder(binding.root) {
-        var job: Job? = null
+        var loadJob: Job? = null
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int) =
@@ -53,25 +56,28 @@ class PlaylistAdapter(
             }
         }
 
-        // MODERNEŞTİRME: Şarkı sayısı ve İLK ŞARKI RESMİNİ yükle
-        holder.job?.cancel()
-        holder.job = scope.launch {
-            val db = AppDatabase.getInstance(holder.itemView.context)
-            db.playlistSongDao().getSongsInPlaylist(playlist.id).collectLatest { songs ->
-                withContext(Dispatchers.Main) {
-                    holder.binding.tvSongCount.text = "${songs.size} şarkı"
-                    
-                    // İlk şarkının resmini yükle
-                    if (songs.isNotEmpty()) {
-                        val firstSong = songs[0]
-                        holder.binding.ivPlaylistCover.load(firstSong.thumbnail.ifEmpty { firstSong.videoId }) {
-                            crossfade(true)
-                            placeholder(android.R.drawable.ic_menu_gallery)
-                            error(android.R.drawable.ic_menu_gallery)
-                            transformations(RoundedCornersTransformation(14f))
+        // Memory leak fix: Lifecycle-aware flow collection
+        holder.loadJob?.cancel()
+        holder.loadJob = lifecycleOwner.lifecycleScope.launch {
+            lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                val db = AppDatabase.getInstance(holder.itemView.context)
+                db.playlistSongDao().getSongsInPlaylist(playlist.id).collect { songs ->
+                    withContext(Dispatchers.Main) {
+                        if (holder.adapterPosition != RecyclerView.NO_POSITION) {
+                            holder.binding.tvSongCount.text = "${songs.size} şarkı"
+                            
+                            if (songs.isNotEmpty()) {
+                                val firstSong = songs[0]
+                                holder.binding.ivPlaylistCover.load(firstSong.thumbnail.ifEmpty { firstSong.videoId }) {
+                                    crossfade(true)
+                                    placeholder(android.R.drawable.ic_menu_gallery)
+                                    error(android.R.drawable.ic_menu_gallery)
+                                    transformations(RoundedCornersTransformation(14f))
+                                }
+                            } else {
+                                holder.binding.ivPlaylistCover.setImageResource(android.R.drawable.ic_menu_gallery)
+                            }
                         }
-                    } else {
-                        holder.binding.ivPlaylistCover.setImageResource(android.R.drawable.ic_menu_gallery)
                     }
                 }
             }
@@ -80,6 +86,6 @@ class PlaylistAdapter(
 
     override fun onViewRecycled(holder: VH) {
         super.onViewRecycled(holder)
-        holder.job?.cancel()
+        holder.loadJob?.cancel()
     }
 }

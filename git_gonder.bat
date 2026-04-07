@@ -15,8 +15,9 @@ REM Push et
 echo Push yapiliyor: origin/main
 git push origin main
 if errorlevel 1 (
-    echo Push basarisiz, force push deneniyor...
-    git push -f origin main
+    echo Push basarisiz, once pull deneniyor...
+    git pull --rebase origin main
+    git push origin main
 )
 
 echo Islem tamamlandi!

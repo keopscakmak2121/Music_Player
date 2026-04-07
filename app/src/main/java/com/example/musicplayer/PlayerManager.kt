@@ -30,14 +30,12 @@ object PlayerManager {
 
     private var controller: MediaController? = null
     
-    // URL Önbelleği
     private val urlCache = mutableMapOf<String, String>()
 
-    // URL Çözücü
     var urlResolver: ((Track, (String) -> Unit) -> Unit)? = null
 
     private var retryCount = 0
-    private const val MAX_RETRY = 1
+    private const val MAX_RETRY = 2
     private val mainHandler = Handler(Looper.getMainLooper())
 
     private val _isPlayingFlow = MutableStateFlow(false)
@@ -47,6 +45,8 @@ object PlayerManager {
     val currentTrackFlow = _currentTrackFlow.asStateFlow()
 
     private val playbackStateListeners = mutableListOf<(Boolean) -> Unit>()
+    
+    var onError: ((String) -> Unit)? = null
 
     fun addPlaybackStateListener(listener: (Boolean) -> Unit) {
         if (!playbackStateListeners.contains(listener)) {
@@ -81,17 +81,29 @@ object PlayerManager {
             }
 
             override fun onPlayerError(error: PlaybackException) {
-                val isSourceError = error.errorCode in
-                    PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS..
+                val errorMessage = when (error.errorCode) {
+                    PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS -> "Bağlantı hatası: Sunucuya ulaşılamıyor"
+                    PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED -> "İnternet bağlantınızı kontrol edin"
+                    PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND -> "Dosya bulunamadı"
+                    PlaybackException.ERROR_CODE_DECODER_INIT_FAILED -> "Bu format desteklenmiyor"
+                    PlaybackException.ERROR_CODE_AUDIO_TRACK_INIT_FAILED -> "Ses çalma hatası"
+                    else -> "Bir hata oluştu: ${error.message}"
+                }
+                
+                val isSourceError = error.errorCode in setOf(
+                    PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS,
                     PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED
+                )
 
                 if (isSourceError && retryCount < MAX_RETRY) {
                     retryCount++
                     val track = currentQueue.getOrNull(currentIndex) ?: return
                     urlCache.remove(track.id)
-                    mainHandler.postDelayed({ resolveAndPlay(track) }, 500)
+                    onError?.invoke("Bağlantı hatası, yeniden deneniyor... ($retryCount/$MAX_RETRY)")
+                    mainHandler.postDelayed({ resolveAndPlay(track) }, 1000)
                 } else {
                     retryCount = 0
+                    onError?.invoke(errorMessage)
                     playNext()
                 }
             }
@@ -112,12 +124,22 @@ object PlayerManager {
     fun seekTo(position: Long) { controller?.seekTo(position) }
 
     fun togglePlayPause() {
-        val c = controller ?: return
+        val c = controller ?: run {
+            onError?.invoke("Oyuncu hazır değil")
+            return
+        }
         if (c.isPlaying) c.pause() else c.play()
     }
 
     fun playQueue(tracks: List<Track>, startIndex: Int) {
-        if (tracks.isEmpty()) return
+        if (tracks.isEmpty()) {
+            onError?.invoke("Çalma listesi boş")
+            return
+        }
+        if (startIndex !in tracks.indices) {
+            onError?.invoke("Geçersiz şarkı index'i")
+            return
+        }
         currentQueue = tracks
         currentIndex = startIndex
         retryCount = 0
@@ -131,16 +153,30 @@ object PlayerManager {
     }
 
     fun playNext() {
-        if (currentQueue.isEmpty()) return
+        if (currentQueue.isEmpty()) {
+            onError?.invoke("Çalma listesi boş")
+            return
+        }
         retryCount = 0
         currentIndex = getNextIndex()
+        if (currentIndex == -1) {
+            onError?.invoke("Sıradaki şarkı bulunamadı")
+            return
+        }
         resolveAndPlay(currentQueue[currentIndex])
     }
 
     fun playPrev() {
-        if (currentQueue.isEmpty()) return
+        if (currentQueue.isEmpty()) {
+            onError?.invoke("Çalma listesi boş")
+            return
+        }
         retryCount = 0
         currentIndex = getPrevIndex()
+        if (currentIndex == -1) {
+            onError?.invoke("Önceki şarkı bulunamadı")
+            return
+        }
         resolveAndPlay(currentQueue[currentIndex])
     }
 
@@ -192,20 +228,29 @@ object PlayerManager {
         }
 
         urlResolver?.invoke(track) { url -> 
-            urlCache[track.id] = url
-            play(track, url)
+            if (url.isNotEmpty()) {
+                urlCache[track.id] = url
+                play(track, url)
+            } else {
+                onError?.invoke("Şarkı URL'si alınamadı: ${track.name}")
+            }
         }
     }
 
     private fun play(track: Track, url: String) {
         val c = controller ?: return
         mainHandler.post {
-            val mediaItem = MediaItem.Builder().setUri(url).setMediaId(track.id).build()
-            c.setMediaItem(mediaItem)
-            c.prepare()
-            c.play()
-            _currentTrackFlow.value = track to currentIndex
-            onTrackChanged?.invoke(track, currentIndex)
+            try {
+                val mediaItem = MediaItem.Builder().setUri(url).setMediaId(track.id).build()
+                c.setMediaItem(mediaItem)
+                c.prepare()
+                c.play()
+                _currentTrackFlow.value = track to currentIndex
+                onTrackChanged?.invoke(track, currentIndex)
+            } catch (e: Exception) {
+                onError?.invoke("Şarkı çalınamadı: ${e.message}")
+                playNext()
+            }
         }
     }
 

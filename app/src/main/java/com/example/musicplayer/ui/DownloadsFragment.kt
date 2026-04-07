@@ -2,11 +2,13 @@ package com.example.musicplayer.ui
 
 import android.app.AlertDialog
 import android.content.ContentUris
+import android.content.Context
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -46,6 +48,7 @@ class DownloadsFragment : Fragment() {
 
     private var allFiles: List<LocalFile> = emptyList()
     private var showingVideo = false
+    private var currentAdapter: DownloadedTrackAdapter? = null
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         _binding = FragmentDownloadsBinding.inflate(inflater, container, false)
@@ -128,8 +131,6 @@ class DownloadsFragment : Fragment() {
             filterAndShow()
         }
     }
-
-    private var currentAdapter: DownloadedTrackAdapter? = null
 
     private fun filterAndShow() {
         if (!isAdded || _binding == null) return
@@ -229,6 +230,7 @@ class DownloadsFragment : Fragment() {
     private fun queryMelodifyFiles(): List<LocalFile> {
         val result = mutableListOf<LocalFile>()
         val ctx = context ?: return emptyList()
+        
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 val collections = listOf(
@@ -281,7 +283,9 @@ class DownloadsFragment : Fragment() {
                     }
                 }
             }
-        } catch (e: Exception) {}
+        } catch (e: Exception) {
+            Log.e("DownloadsFragment", "queryMelodifyFiles error", e)
+        }
         return result.distinctBy { it.path }
     }
 

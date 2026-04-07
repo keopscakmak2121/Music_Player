@@ -9,6 +9,7 @@ import android.widget.EditText
 import android.widget.Toast
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.musicplayer.adapter.PlaylistAdapter
 import com.example.musicplayer.databinding.FragmentPlaylistsBinding
@@ -33,9 +34,8 @@ class PlaylistsFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
         val db = AppDatabase.getInstance(requireContext())
 
-        // Pass viewLifecycleOwner.lifecycleScope to adapter
         adapter = PlaylistAdapter(
-            scope = viewLifecycleOwner.lifecycleScope,
+            lifecycleOwner = viewLifecycleOwner,
             onClick = { playlist -> onPlaylistClick?.invoke(playlist) },
             onDelete = { playlist ->
                 lifecycleScope.launch {
@@ -49,12 +49,14 @@ class PlaylistsFragment : Fragment() {
         binding.rvPlaylists.layoutManager = LinearLayoutManager(requireContext())
         binding.rvPlaylists.adapter = adapter
 
-        // Observe playlists
+        // Lifecycle-aware playlist observation
         lifecycleScope.launch {
-            db.playlistDao().getAllPlaylists().collect { playlists ->
-                adapter.submitList(playlists)
-                binding.emptyView.visibility = if (playlists.isEmpty()) View.VISIBLE else View.GONE
-                binding.rvPlaylists.visibility = if (playlists.isEmpty()) View.GONE else View.VISIBLE
+            repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) {
+                db.playlistDao().getAllPlaylists().collect { playlists ->
+                    adapter.submitList(playlists)
+                    binding.emptyView.visibility = if (playlists.isEmpty()) View.VISIBLE else View.GONE
+                    binding.rvPlaylists.visibility = if (playlists.isEmpty()) View.GONE else View.VISIBLE
+                }
             }
         }
 

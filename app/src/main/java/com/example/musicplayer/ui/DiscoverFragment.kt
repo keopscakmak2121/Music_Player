@@ -102,6 +102,11 @@ class DiscoverFragment : Fragment() {
         binding.btnCancelSelection.setOnClickListener { trackAdapter?.exitSelectionMode() }
         binding.btnDownloadSelected.setOnClickListener { downloadSelected() }
 
+        // YouTube Playlist import butonu
+        binding.btnImportPlaylist.setOnClickListener {
+            (activity as? com.example.musicplayer.MainActivity)?.openPlaylistImport()
+        }
+
         binding.rvTracks.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
                 if (dy > 0) {
@@ -595,6 +600,7 @@ class DiscoverFragment : Fragment() {
     override fun onDestroyView() {
         super.onDestroyView()
         PlayerManager.removePlaybackStateListener(playbackStateListener)
+        PlayerManager.urlResolver = null  // Memory leak fix: singleton'daki fragment referansını temizle
         _binding = null
     }
 }

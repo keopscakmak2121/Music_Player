@@ -24,6 +24,7 @@ import com.example.musicplayer.ui.DiscoverFragment
 import com.example.musicplayer.ui.DownloadsFragment
 import com.example.musicplayer.ui.FullPlayerFragment
 import com.example.musicplayer.ui.PlaylistDetailFragment
+import com.example.musicplayer.ui.PlaylistImportFragment
 import com.example.musicplayer.ui.PlaylistsFragment
 import com.example.musicplayer.ui.SettingsFragment
 import com.google.common.util.concurrent.ListenableFuture
@@ -42,6 +43,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var settingsFragment: SettingsFragment
     private lateinit var playlistDetailFragment: PlaylistDetailFragment
     private lateinit var fullPlayerFragment: FullPlayerFragment
+    private lateinit var playlistImportFragment: PlaylistImportFragment
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private var isUserSeeking = false
@@ -128,6 +130,7 @@ class MainActivity : AppCompatActivity() {
             settingsFragment = SettingsFragment()
             playlistDetailFragment = PlaylistDetailFragment()
             fullPlayerFragment = FullPlayerFragment()
+            playlistImportFragment = PlaylistImportFragment()
 
             supportFragmentManager.beginTransaction()
                 .add(R.id.fragmentContainer, discoverFragment, "discover")
@@ -135,6 +138,7 @@ class MainActivity : AppCompatActivity() {
                 .add(R.id.fragmentContainer, downloadsFragment, "downloads").hide(downloadsFragment)
                 .add(R.id.fragmentContainer, settingsFragment, "settings").hide(settingsFragment)
                 .add(R.id.fragmentContainer, playlistDetailFragment, "playlist_detail").hide(playlistDetailFragment)
+                .add(R.id.fragmentContainer, playlistImportFragment, "playlist_import").hide(playlistImportFragment)
                 .add(R.id.fullPlayerContainer, fullPlayerFragment, "full_player").hide(fullPlayerFragment)
                 .commit()
         } else {
@@ -143,6 +147,7 @@ class MainActivity : AppCompatActivity() {
             downloadsFragment = supportFragmentManager.findFragmentByTag("downloads") as DownloadsFragment
             settingsFragment = supportFragmentManager.findFragmentByTag("settings") as SettingsFragment
             playlistDetailFragment = supportFragmentManager.findFragmentByTag("playlist_detail") as PlaylistDetailFragment
+            playlistImportFragment = (supportFragmentManager.findFragmentByTag("playlist_import") as? PlaylistImportFragment) ?: PlaylistImportFragment()
             fullPlayerFragment = supportFragmentManager.findFragmentByTag("full_player") as FullPlayerFragment
         }
     }
@@ -240,6 +245,24 @@ class MainActivity : AppCompatActivity() {
         fullPlayerFragment.onDownload = { track ->
             discoverFragment.triggerDownload(track)
         }
+
+        // Playlist import callbacks
+        playlistImportFragment.onBack = {
+            supportFragmentManager.beginTransaction()
+                .hide(playlistImportFragment).show(discoverFragment).commit()
+            binding.bottomNav.visibility = View.VISIBLE
+        }
+        playlistImportFragment.onDownloadTrack = { track ->
+            discoverFragment.triggerDownload(track)
+        }
+    }
+
+    fun openPlaylistImport() {
+        val allFragments = listOf(discoverFragment, playlistsFragment, downloadsFragment, settingsFragment, playlistDetailFragment)
+        val tx = supportFragmentManager.beginTransaction()
+        allFragments.forEach { tx.hide(it) }
+        tx.show(playlistImportFragment).commit()
+        binding.bottomNav.visibility = View.GONE
     }
 
     private fun showFullPlayer() {
