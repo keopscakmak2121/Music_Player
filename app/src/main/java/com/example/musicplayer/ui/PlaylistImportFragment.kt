@@ -56,7 +56,7 @@ class PlaylistImportFragment : Fragment() {
     private var importAdapter: PlaylistImportAdapter? = null
 
     companion object {
-        private const val BASE_URL = "http://77.92.154.224:5050/"
+        private const val BASE_URL = "http://100.122.252.85:5050/"
     }
 
     override fun onCreateView(

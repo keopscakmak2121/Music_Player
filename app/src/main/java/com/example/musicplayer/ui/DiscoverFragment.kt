@@ -87,7 +87,7 @@ class DiscoverFragment : Fragment() {
 
     companion object {
         private const val TAG = "MelodifySearch"
-        const val BASE_URL = "http://77.92.154.224:5050/"
+        const val BASE_URL = "http://100.122.252.85:5050/"
         private const val NOTIF_CHANNEL = "melodify_downloads"
         private const val DOWNLOAD_CHUNK_SIZE = 1024 * 1024 // 1MB chunk
         private const val MAX_RETRY_COUNT = 3
