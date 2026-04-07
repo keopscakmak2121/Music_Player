@@ -314,8 +314,9 @@ class DiscoverFragment : Fragment() {
     private fun setupDownloadClient() {
         downloadClient = OkHttpClient.Builder()
             .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(30, TimeUnit.MINUTES)
-            .writeTimeout(30, TimeUnit.MINUTES)
+            .readTimeout(0, TimeUnit.SECONDS)   // 0 = sınırsız: büyük dosyalarda chunk arası bekleme timeout'u olmasın
+            .writeTimeout(0, TimeUnit.SECONDS)  // 0 = sınırsız
+            .callTimeout(0, TimeUnit.SECONDS)   // 0 = sınırsız: toplam işlem süresi sınırsız
             .retryOnConnectionFailure(true)
             .connectionPool(ConnectionPool(10, 5, TimeUnit.MINUTES))
             .build()
