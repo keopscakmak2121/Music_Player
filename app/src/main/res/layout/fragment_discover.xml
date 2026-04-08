@@ -150,6 +150,34 @@
 
     </LinearLayout>
 
+    <!-- Arama Geçmişi Başlığı -->
+    <LinearLayout
+        android:id="@+id/historyHeader"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingStart="20dp"
+        android:paddingEnd="16dp"
+        android:gravity="center_vertical"
+        android:visibility="gone">
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Arama Geçmişi"
+            android:textColor="@color/text_secondary"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+        <Button
+            android:id="@+id/btnClearHistory"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Temizle"
+            android:textColor="@color/accent"
+            android:textSize="12sp" />
+    </LinearLayout>
+
     <!-- Arama yükleme göstergesi -->
     <ProgressBar
         android:id="@+id/progressBar"
@@ -168,7 +196,7 @@
         android:clipToPadding="false"
         android:paddingBottom="8dp" />
 
-    <!-- Sayfalama yükleme (loadMore — artık adapter footer'ı kullanıyor, bu yedek) -->
+    <!-- Sayfalama yükleme -->
     <ProgressBar
         android:id="@+id/loadMoreProgress"
         android:layout_width="wrap_content"

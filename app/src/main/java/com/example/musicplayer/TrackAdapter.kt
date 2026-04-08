@@ -23,7 +23,8 @@ class TrackAdapter(
     private val onAddToPlaylistClick: (Track) -> Unit,
     private val onLongClick: ((Track) -> Unit)? = null,
     private val onCancelDownload: ((Long) -> Unit)? = null,
-    private val onSelectionChanged: ((Int) -> Unit)? = null
+    private val onSelectionChanged: ((Int) -> Unit)? = null,
+    private val isPlaylistCheck: ((Int) -> Boolean)? = null
 ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
     private val downloadMap = mutableMapOf<Long, Int>()
@@ -95,6 +96,26 @@ class TrackAdapter(
                 true
             }
 
+            // Playlist ise indirme ve listeye ekleme butonlarını gizle, yerine liste ikonu koy
+            val isPlaylist = isPlaylistCheck?.invoke(position) ?: false
+            if (isPlaylist) {
+                btnDownload.setImageResource(android.R.drawable.ic_menu_agenda) // Liste ikonu
+                btnDownload.isEnabled = true
+                btnAddToPlaylist.visibility = View.GONE
+                tvDuration.text = "Liste"
+            } else {
+                btnAddToPlaylist.visibility = View.VISIBLE
+                btnDownload.setImageResource(android.R.drawable.stat_sys_download)
+                
+                // Listede mi kontrolü
+                val isInPlaylist = playlistMap[position] ?: false
+                btnAddToPlaylist.setImageResource(
+                    if (isInPlaylist) android.R.drawable.checkbox_on_background 
+                    else android.R.drawable.ic_menu_add
+                )
+                btnAddToPlaylist.isEnabled = !isInPlaylist
+            }
+
             btnDownload.setOnClickListener {
                 if (selectionMode) return@setOnClickListener
                 onDownloadClick(track, position)
@@ -104,17 +125,14 @@ class TrackAdapter(
                 if (selectionMode) return@setOnClickListener
                 onAddToPlaylistClick(track)
             }
-
-            // Listede mi kontrolü
-            val isInPlaylist = playlistMap[position] ?: false
-            btnAddToPlaylist.setImageResource(
-                if (isInPlaylist) android.R.drawable.checkbox_on_background 
-                else android.R.drawable.ic_menu_add
-            )
-            btnAddToPlaylist.isEnabled = !isInPlaylist
         }
         bindPlayingState(holder.binding, position)
-        bindDownloadState(holder.binding, position)
+        if (!(isPlaylistCheck?.invoke(position) ?: false)) {
+            bindDownloadState(holder.binding, position)
+        } else {
+            holder.binding.downloadProgress.visibility = View.GONE
+            holder.binding.tvDownloadPercent.visibility = View.GONE
+        }
     }
 
     private fun bindPlayingState(binding: ItemTrackBinding, position: Int) {
@@ -173,7 +191,6 @@ class TrackAdapter(
 
     // --- Selection and Helper Methods ---
     
-    // PRIVATE -> pozisyon ile seçim (iç kullanım)
     private fun toggleSelection(position: Int) {
         if (selectedPositions.contains(position)) selectedPositions.remove(position)
         else selectedPositions.add(position)
@@ -182,7 +199,6 @@ class TrackAdapter(
         if (selectedPositions.isEmpty() && selectionMode) exitSelectionMode()
     }
     
-    // PUBLIC -> videoId ile seçim (DiscoverFragment'tan çağrılacak)
     fun toggleSelection(videoId: String) {
         val position = tracks.indexOfFirst { it.id == videoId }
         if (position != -1) {

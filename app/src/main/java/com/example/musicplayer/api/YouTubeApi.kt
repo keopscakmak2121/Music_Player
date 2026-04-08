@@ -19,7 +19,6 @@ interface YouTubeApi {
         @Path("videoId") videoId: String
     ): Call<InvidiousVideoInfo>
 
-    // YENİ: Playlist bilgilerini getir
     @GET("playlist/{playlistId}")
     fun getPlaylist(
         @Path("playlistId") playlistId: String
@@ -37,14 +36,14 @@ data class InvidiousSearchResult(
     @SerializedName("title") val title: String,
     @SerializedName("author") val author: String,
     @SerializedName("thumbnail") val thumbnails: String,
-    @SerializedName("duration") val duration: Int
+    @SerializedName("duration") val duration: Int,
+    @SerializedName("type") val type: String? = "video" // "video" veya "playlist"
 )
 
 data class InvidiousVideoInfo(
     @SerializedName("url") val url: String
 )
 
-// YENİ: Playlist response modeli
 data class PlaylistInfoResponse(
     @SerializedName("id") val id: String,
     @SerializedName("title") val title: String,

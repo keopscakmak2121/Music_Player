@@ -327,10 +327,6 @@ class PlaylistImportFragment : Fragment() {
     }
 
     // YouTube URL'inden playlist ID'sini çıkar
-    // Desteklenen formatlar:
-    //   https://www.youtube.com/playlist?list=PLxxx
-    //   https://youtube.com/playlist?list=PLxxx
-    //   PLxxx (direkt ID)
     private fun extractPlaylistId(input: String): String? {
         if (input.startsWith("PL") || input.startsWith("RD") || input.startsWith("UU")) {
             return input
@@ -339,19 +335,21 @@ class PlaylistImportFragment : Fragment() {
         return regex.find(input)?.groupValues?.get(1)
     }
 
-    private fun loadPlaylist(playlistId: String) {
+    fun loadPlaylist(playlistId: String) {
+        if (!isAdded) return
         progressBar.visibility = View.VISIBLE
         btnLoad.isEnabled = false
         tvEmpty.visibility = View.GONE
         recyclerView.visibility = View.GONE
         headerLayout.visibility = View.GONE
-        (view?.findViewWithTag<LinearLayout>("actionRow"))?.visibility = View.GONE
+        view?.findViewWithTag<LinearLayout>("actionRow")?.visibility = View.GONE
 
         youtubeApi.getPlaylist(playlistId).enqueue(object : Callback<PlaylistInfoResponse> {
             override fun onResponse(
                 call: Call<PlaylistInfoResponse>,
                 response: Response<PlaylistInfoResponse>
             ) {
+                if (!isAdded) return
                 progressBar.visibility = View.GONE
                 btnLoad.isEnabled = true
 
@@ -368,6 +366,7 @@ class PlaylistImportFragment : Fragment() {
             }
 
             override fun onFailure(call: Call<PlaylistInfoResponse>, t: Throwable) {
+                if (!isAdded) return
                 progressBar.visibility = View.GONE
                 btnLoad.isEnabled = true
                 tvEmpty.text = "Bağlantı hatası: ${t.message}"
@@ -389,7 +388,7 @@ class PlaylistImportFragment : Fragment() {
         headerLayout.visibility = View.VISIBLE
 
         // Aksiyon satırı
-        (view?.findViewWithTag<LinearLayout>("actionRow"))?.visibility = View.VISIBLE
+        view?.findViewWithTag<LinearLayout>("actionRow")?.visibility = View.VISIBLE
 
         // Adapter
         importAdapter = PlaylistImportAdapter(

@@ -17,13 +17,22 @@ object FileUtils {
     private val uriCache = ConcurrentHashMap<String, String>()
 
     fun getSafeFileName(name: String): String {
-        return name.take(50).replace(Regex("[/\\\\:*?\"<>|]"), "_").trim()
+        val turkishChars = charArrayOf('ç', 'Ç', 'ğ', 'Ğ', 'ı', 'İ', 'ö', 'Ö', 'ş', 'Ş', 'ü', 'Ü')
+        val englishChars = charArrayOf('c', 'C', 'g', 'G', 'i', 'I', 'o', 'O', 's', 'S', 'u', 'U')
+        
+        var safeName = name
+        for (i in turkishChars.indices) {
+            safeName = safeName.replace(turkishChars[i], englishChars[i])
+        }
+        
+        return safeName.take(50)
+            .replace(Regex("[/\\\\:*?\"<>|]"), "_")
+            .trim()
     }
 
     fun findLocalUri(context: Context, trackName: String): String? {
         val safeName = getSafeFileName(trackName)
         
-        // Önbellekten kontrol et
         uriCache[safeName]?.let { return it }
         
         try {
@@ -32,7 +41,6 @@ object FileUtils {
                 val selection = "${MediaStore.MediaColumns.DISPLAY_NAME} LIKE ?"
                 val args = arrayOf("%$safeName%")
                 
-                // Müzik klasöründe ara
                 context.contentResolver.query(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, projection, selection, args, null)?.use { c ->
                     if (c.moveToFirst()) {
                         val uri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, c.getLong(0)).toString()
@@ -41,7 +49,6 @@ object FileUtils {
                     }
                 }
                 
-                // İndirilenler klasöründe ara
                 context.contentResolver.query(MediaStore.Downloads.EXTERNAL_CONTENT_URI, projection, selection, args, null)?.use { c ->
                     if (c.moveToFirst()) {
                         val uri = ContentUris.withAppendedId(MediaStore.Downloads.EXTERNAL_CONTENT_URI, c.getLong(0)).toString()
@@ -50,15 +57,18 @@ object FileUtils {
                     }
                 }
             } else {
-                val mp3 = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC), "Melodify/$safeName.mp3")
-                if (mp3.exists()) {
-                    uriCache[safeName] = mp3.absolutePath
-                    return mp3.absolutePath
-                }
-                val mp4 = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "Melodify/$safeName.mp4")
-                if (mp4.exists()) {
-                    uriCache[safeName] = mp4.absolutePath
-                    return mp4.absolutePath
+                val dirMusic = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC), "Melodify")
+                val dirDown = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "Melodify")
+                
+                listOf(dirMusic, dirDown).forEach { dir ->
+                    if (dir.exists()) {
+                        dir.listFiles()?.forEach { file ->
+                            if (file.name.contains(safeName, ignoreCase = true)) {
+                                uriCache[safeName] = file.absolutePath
+                                return file.absolutePath
+                            }
+                        }
+                    }
                 }
             }
         } catch (e: Exception) {
@@ -67,7 +77,6 @@ object FileUtils {
         return null
     }
     
-    // Önbelleği temizle (yeni dosya indirildiğinde çağır)
     fun invalidateCache() {
         uriCache.clear()
     }

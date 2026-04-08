@@ -20,14 +20,7 @@ import coil.transform.RoundedCornersTransformation
 import com.example.musicplayer.databinding.ActivityMainBinding
 import com.example.musicplayer.db.PlaylistEntity
 import com.example.musicplayer.model.Track
-import com.example.musicplayer.ui.DiscoverFragment
-import com.example.musicplayer.ui.DownloadsFragment
-import com.example.musicplayer.ui.FullPlayerFragment
-import com.example.musicplayer.ui.PlaylistDetailFragment
-import com.example.musicplayer.ui.PlaylistImportFragment
-import com.example.musicplayer.ui.PlaylistsFragment
-import com.example.musicplayer.ui.RecentlyPlayedFragment
-import com.example.musicplayer.ui.SettingsFragment
+import com.example.musicplayer.ui.*
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
 
@@ -102,23 +95,16 @@ class MainActivity : AppCompatActivity() {
 
     private fun checkPermissions() {
         val permissionsToRequest = mutableListOf<String>()
-        
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) !=
-                PackageManager.PERMISSION_GRANTED
-            ) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                 permissionsToRequest.add(Manifest.permission.POST_NOTIFICATIONS)
             }
         }
-        
         if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) !=
-                PackageManager.PERMISSION_GRANTED
-            ) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
                 permissionsToRequest.add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
             }
         }
-
         if (permissionsToRequest.isNotEmpty()) {
             requestPermissionLauncher.launch(permissionsToRequest.toTypedArray())
         }
@@ -170,7 +156,7 @@ class MainActivity : AppCompatActivity() {
                 R.id.nav_settings -> settingsFragment
                 else -> return@setOnItemSelectedListener false
             }
-            val all = listOf(discoverFragment, recentlyPlayedFragment, playlistsFragment, downloadsFragment, settingsFragment, playlistDetailFragment)
+            val all = listOf(discoverFragment, recentlyPlayedFragment, playlistsFragment, downloadsFragment, settingsFragment, playlistDetailFragment, playlistImportFragment)
             val tx = supportFragmentManager.beginTransaction()
             all.forEach { if (it == show) tx.show(it) else tx.hide(it) }
             tx.commit()
@@ -189,26 +175,18 @@ class MainActivity : AppCompatActivity() {
                 updateMiniPlayer(track)
                 discoverFragment.updatePlayingPosition(index)
                 playlistDetailFragment.updatePlayingPosition(index)
+                // Şarkı değiştiğinde son dinlenenlere kaydet
+                RecentlyPlayedFragment.saveTrack(this@MainActivity, track)
             }
             PlayerManager.addPlaybackStateListener(playbackStateListener)
         }, MoreExecutors.directExecutor())
     }
 
     private fun setupMiniPlayer() {
-        binding.miniPlayer.setOnClickListener {
-            showFullPlayer()
-        }
-        
-        binding.miniPlayerPlayPause.setOnClickListener {
-            PlayerManager.togglePlayPause()
-        }
-        binding.miniPlayerPrev.setOnClickListener {
-            PlayerManager.playPrev()
-        }
-        binding.miniPlayerNext.setOnClickListener {
-            PlayerManager.playNext()
-        }
-        
+        binding.miniPlayer.setOnClickListener { showFullPlayer() }
+        binding.miniPlayerPlayPause.setOnClickListener { PlayerManager.togglePlayPause() }
+        binding.miniPlayerPrev.setOnClickListener { PlayerManager.playPrev() }
+        binding.miniPlayerNext.setOnClickListener { PlayerManager.playNext() }
         binding.miniPlayerSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 if (fromUser) {
@@ -226,49 +204,45 @@ class MainActivity : AppCompatActivity() {
 
     private fun wireCallbacks() {
         val playCallback: (Track, String) -> Unit = { track, url -> playTrack(track, url) }
-
         discoverFragment.onTrackSelected = playCallback
         recentlyPlayedFragment.onTrackSelected = playCallback
-        
         supportFragmentManager.setFragmentResultListener("download_complete", this) { _, _ ->
             downloadsFragment.loadDownloadedFiles()
         }
-
         downloadsFragment.onFileSelected = playCallback
         downloadsFragment.onFileDeleted = { path -> discoverFragment.resetDownloadByPath(path) }
-        
         playlistDetailFragment.onTrackSelected = playCallback
         playlistsFragment.onPlaylistClick = { playlist -> openPlaylistDetail(playlist) }
         playlistDetailFragment.onBack = {
-            supportFragmentManager.beginTransaction()
-                .hide(playlistDetailFragment).show(playlistsFragment).commit()
+            supportFragmentManager.beginTransaction().hide(playlistDetailFragment).show(playlistsFragment).commit()
             binding.bottomNav.selectedItemId = R.id.nav_playlists
         }
-        
-        fullPlayerFragment.onBack = {
-            hideFullPlayer()
-        }
-        
-        fullPlayerFragment.onDownload = { track ->
-            discoverFragment.triggerDownload(track)
-        }
+        fullPlayerFragment.onBack = { hideFullPlayer() }
+        fullPlayerFragment.onDownload = { track -> discoverFragment.triggerDownload(track) }
 
-        // Playlist import callbacks
         playlistImportFragment.onBack = {
-            supportFragmentManager.beginTransaction()
-                .hide(playlistImportFragment).show(discoverFragment).commit()
+            supportFragmentManager.beginTransaction().hide(playlistImportFragment).show(discoverFragment).commit()
             binding.bottomNav.visibility = View.VISIBLE
+            binding.bottomNav.selectedItemId = R.id.nav_discover
         }
-        playlistImportFragment.onDownloadTrack = { track ->
-            discoverFragment.triggerDownload(track)
-        }
+        playlistImportFragment.onDownloadTrack = { track -> discoverFragment.triggerDownload(track) }
+        discoverFragment.onPlaylistSelected = { playlistId -> openPlaylistImportById(playlistId) }
     }
 
     fun openPlaylistImport() {
-        val allFragments = listOf(discoverFragment, playlistsFragment, downloadsFragment, settingsFragment, playlistDetailFragment)
+        val allFragments = listOf(discoverFragment, playlistsFragment, downloadsFragment, settingsFragment, playlistDetailFragment, recentlyPlayedFragment)
         val tx = supportFragmentManager.beginTransaction()
         allFragments.forEach { tx.hide(it) }
         tx.show(playlistImportFragment).commit()
+        binding.bottomNav.visibility = View.GONE
+    }
+
+    private fun openPlaylistImportById(playlistId: String) {
+        val allFragments = listOf(discoverFragment, playlistsFragment, downloadsFragment, settingsFragment, playlistDetailFragment, recentlyPlayedFragment)
+        val tx = supportFragmentManager.beginTransaction()
+        allFragments.forEach { tx.hide(it) }
+        tx.show(playlistImportFragment).commit()
+        playlistImportFragment.loadPlaylist(playlistId)
         binding.bottomNav.visibility = View.GONE
     }
 
@@ -278,18 +252,14 @@ class MainActivity : AppCompatActivity() {
         binding.fullPlayerContainer.visibility = View.VISIBLE
         supportFragmentManager.beginTransaction()
             .setCustomAnimations(R.anim.slide_in_up, R.anim.slide_out_down)
-            .show(fullPlayerFragment)
-            .commit()
+            .show(fullPlayerFragment).commit()
     }
 
     private fun hideFullPlayer() {
         supportFragmentManager.beginTransaction()
             .setCustomAnimations(R.anim.slide_in_up, R.anim.slide_out_down)
-            .hide(fullPlayerFragment)
-            .commitNow()
-        
+            .hide(fullPlayerFragment).commitNow()
         binding.fullPlayerContainer.visibility = View.GONE
-        
         if (PlayerManager.currentQueue.isNotEmpty() && PlayerManager.currentIndex != -1) {
             binding.miniPlayer.visibility = View.VISIBLE
         }
@@ -301,6 +271,8 @@ class MainActivity : AppCompatActivity() {
             hideFullPlayer()
         } else if (playlistDetailFragment.isVisible) {
             playlistDetailFragment.onBack?.invoke()
+        } else if (playlistImportFragment.isVisible) {
+            playlistImportFragment.onBack?.invoke()
         } else {
             super.onBackPressed()
         }
@@ -309,21 +281,23 @@ class MainActivity : AppCompatActivity() {
     private fun openPlaylistDetail(playlist: PlaylistEntity) {
         playlistDetailFragment.playlistId = playlist.id
         playlistDetailFragment.playlistName = playlist.name
-        val all = listOf(discoverFragment, playlistsFragment, downloadsFragment, settingsFragment)
+        val all = listOf(discoverFragment, playlistsFragment, downloadsFragment, settingsFragment, recentlyPlayedFragment)
         val tx = supportFragmentManager.beginTransaction()
         all.forEach { tx.hide(it) }
         tx.show(playlistDetailFragment).commit()
     }
 
     fun playTrack(track: Track, url: String) {
+        if (url.isEmpty()) {
+            PlayerManager.playQueue(listOf(track), 0)
+            return
+        }
         val c = controller ?: return
-        val mediaItem = androidx.media3.common.MediaItem.Builder()
-            .setUri(url).setMediaId(track.id).build()
+        val mediaItem = androidx.media3.common.MediaItem.Builder().setUri(url).setMediaId(track.id).build()
         c.setMediaItem(mediaItem)
         c.prepare()
         c.play()
         updateMiniPlayer(track)
-        // Son dinlenenler'e kaydet
         RecentlyPlayedFragment.saveTrack(this, track)
     }
 
@@ -335,9 +309,7 @@ class MainActivity : AppCompatActivity() {
             binding.miniPlayerTitle.text = track.name
             binding.miniPlayerArtist.text = track.artistName
             if (track.image.isNotEmpty()) {
-                binding.miniPlayerArt.load(track.image) {
-                    transformations(RoundedCornersTransformation(12f))
-                }
+                binding.miniPlayerArt.load(track.image) { transformations(RoundedCornersTransformation(12f)) }
             }
             binding.miniPlayerSeekBar.progress = 0
         }
