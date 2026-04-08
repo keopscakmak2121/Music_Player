@@ -219,6 +219,9 @@ class DownloadsFragment : Fragment() {
                                     requireContext().contentResolver.delete(file.uri, null, null)
                                 else File(file.path).delete()
                                 AppDatabase.getInstance(requireContext()).playlistSongDao().deleteSongByVideoId(file.path)
+                                withContext(Dispatchers.Main) {
+                                    onFileDeleted?.invoke(file.name)
+                                }
                             } catch (e: Exception) {}
                         }
                     }
@@ -301,6 +304,7 @@ class DownloadsFragment : Fragment() {
                     }
                     if (ok) {
                         AppDatabase.getInstance(requireContext()).playlistSongDao().deleteSongByVideoId(file.path)
+                        onFileDeleted?.invoke(file.name)
                         loadDownloadedFiles()
                     }
                 }

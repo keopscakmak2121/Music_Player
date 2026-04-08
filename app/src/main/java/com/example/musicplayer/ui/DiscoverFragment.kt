@@ -1053,15 +1053,25 @@ class DiscoverFragment : Fragment() {
     }
 
     fun resetDownloadByPath(deletedFileName: String) {
-        val position = currentTracks.indexOfFirst { track ->
+        // Cache'leri temizle ve anlık güncelleme yap
+        downloadedNamesCache.clear()
+        lastCacheUpdate = 0L
+        FileUtils.invalidateCache()
+        
+        // Görünen listedeki tüm eşleşen şarkıları güncelle
+        currentTracks.forEachIndexed { index, track ->
             val safeName = FileUtils.getSafeFileName(track.name)
-            safeName == deletedFileName
+            // Silinen dosya adı uzantısız geliyor, safeName ile kısmi eşleşme kontrolü yap
+            if (safeName.contains(deletedFileName, ignoreCase = true) || deletedFileName.contains(safeName, ignoreCase = true)) {
+                trackAdapter?.cancelDownload(index)
+                if (track.audio.isNotEmpty()) {
+                    currentTracks[index] = track.copy(audio = "")
+                }
+            }
         }
-        if (position >= 0) {
-            trackAdapter?.cancelDownload(position)
-            // Cache'i güncelle
-            downloadedNamesCache.remove(deletedFileName)
-        }
+        
+        // Ekranda görünenleri tekrar doğrula (daha sağlam olması için)
+        syncDownloadedState()
     }
 
     override fun onDestroyView() {
