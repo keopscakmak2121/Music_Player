@@ -9,5 +9,6 @@ data class Track(
     @SerializedName("image") val image: String,
     @SerializedName("audio") val audio: String,
     @SerializedName("duration") val duration: Int,
-    var videoId: String = "" // Invidious/YouTube search results use this
+    var videoId: String = "", // Invidious/YouTube search results use this
+    var type: String = "video" // "video" veya "playlist"
 )

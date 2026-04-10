@@ -23,8 +23,7 @@ class TrackAdapter(
     private val onAddToPlaylistClick: (Track) -> Unit,
     private val onLongClick: ((Track) -> Unit)? = null,
     private val onCancelDownload: ((Long) -> Unit)? = null,
-    private val onSelectionChanged: ((Int) -> Unit)? = null,
-    private val isPlaylistCheck: ((Int) -> Boolean)? = null
+    private val onSelectionChanged: ((Int) -> Unit)? = null
 ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
     private val downloadMap = mutableMapOf<Long, Int>()
@@ -97,7 +96,7 @@ class TrackAdapter(
             }
 
             // Playlist ise indirme ve listeye ekleme butonlarını gizle, yerine liste ikonu koy
-            val isPlaylist = isPlaylistCheck?.invoke(position) ?: false
+            val isPlaylist = track.type == "playlist"
             if (isPlaylist) {
                 btnDownload.setImageResource(android.R.drawable.ic_menu_agenda) // Liste ikonu
                 btnDownload.isEnabled = true
@@ -127,7 +126,7 @@ class TrackAdapter(
             }
         }
         bindPlayingState(holder.binding, position)
-        if (!(isPlaylistCheck?.invoke(position) ?: false)) {
+        if (track.type != "playlist") {
             bindDownloadState(holder.binding, position)
         } else {
             holder.binding.downloadProgress.visibility = View.GONE

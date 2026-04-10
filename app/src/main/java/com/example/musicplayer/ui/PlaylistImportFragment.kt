@@ -1,6 +1,7 @@
 package com.example.musicplayer.ui
 
 import android.os.Bundle
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -22,11 +23,14 @@ import com.example.musicplayer.model.Track
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
+import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
+import java.util.concurrent.TimeUnit
 
 class PlaylistImportFragment : Fragment() {
 
@@ -56,6 +60,7 @@ class PlaylistImportFragment : Fragment() {
     private var importAdapter: PlaylistImportAdapter? = null
 
     companion object {
+        private const val TAG = "PlaylistImport"
         private const val BASE_URL = "http://100.122.252.85:5050/"
     }
 
@@ -64,7 +69,6 @@ class PlaylistImportFragment : Fragment() {
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
-        // Programmatik layout — XML dosyası gerektirmez
         return buildLayout(inflater.context)
     }
 
@@ -261,8 +265,16 @@ class PlaylistImportFragment : Fragment() {
     }
 
     private fun setupRetrofit() {
+        val logging = HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.HEADERS }
+        val client = OkHttpClient.Builder()
+            .addInterceptor(logging)
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .build()
+
         youtubeApi = Retrofit.Builder()
             .baseUrl(BASE_URL)
+            .client(client)
             .addConverterFactory(GsonConverterFactory.create())
             .build()
             .create(YouTubeApi::class.java)
@@ -355,7 +367,9 @@ class PlaylistImportFragment : Fragment() {
 
                 val data = response.body()
                 if (!response.isSuccessful || data == null) {
-                    tvEmpty.text = "Playlist yüklenemedi"
+                    val errorBody = response.errorBody()?.string() ?: "Bilinmeyen hata"
+                    Log.e(TAG, "Playlist error: $errorBody")
+                    tvEmpty.text = "Playlist yüklenemedi: $errorBody"
                     tvEmpty.visibility = View.VISIBLE
                     return
                 }
@@ -367,6 +381,7 @@ class PlaylistImportFragment : Fragment() {
 
             override fun onFailure(call: Call<PlaylistInfoResponse>, t: Throwable) {
                 if (!isAdded) return
+                Log.e(TAG, "Playlist connection failure", t)
                 progressBar.visibility = View.GONE
                 btnLoad.isEnabled = true
                 tvEmpty.text = "Bağlantı hatası: ${t.message}"
@@ -486,7 +501,8 @@ class PlaylistImportFragment : Fragment() {
         image = thumbnails,
         audio = "",
         duration = duration,
-        videoId = videoId
+        videoId = videoId,
+        type = "video" // Yeni eklenen alan
     )
 }
 

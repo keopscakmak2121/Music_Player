@@ -441,7 +441,7 @@ class DiscoverFragment : Fragment() {
                 hasMore = body.hasMore || (body.tracks.size >= searchCount && body.tracks.isNotEmpty())
                 
                 val newTracks = body.tracks.map {
-                    Track(it.videoId, it.title, it.author, it.thumbnails, "", it.duration, it.videoId)
+                    Track(it.videoId, it.title, it.author, it.thumbnails, "", it.duration, it.videoId, it.type ?: "video")
                 }
 
                 if (reset) {
@@ -449,12 +449,11 @@ class DiscoverFragment : Fragment() {
                     trackAdapter = TrackAdapter(
                         currentTracks,
                         onTrackClick = { track ->
-                            val pos = currentTracks.indexOfFirst { it.id == track.id }
-                            if (pos != -1) {
-                                val originalTrack = body.tracks[pos]
-                                if (originalTrack.type == "playlist") {
-                                    onPlaylistSelected?.invoke(track.id)
-                                } else {
+                            if (track.type == "playlist") {
+                                onPlaylistSelected?.invoke(track.id)
+                            } else {
+                                val pos = currentTracks.indexOfFirst { it.id == track.id }
+                                if (pos != -1) {
                                     val currentPlayingId = PlayerManager.currentQueue.getOrNull(PlayerManager.currentIndex)?.id
                                     if (track.id == currentPlayingId) {
                                         PlayerManager.togglePlayPause()
@@ -464,10 +463,15 @@ class DiscoverFragment : Fragment() {
                                 }
                             }
                         },
-                        onDownloadClick = { track, pos -> showDownloadOptions(track, pos) },
+                        onDownloadClick = { track, pos -> 
+                            if (track.type == "playlist") {
+                                onPlaylistSelected?.invoke(track.id)
+                            } else {
+                                showDownloadOptions(track, pos)
+                            }
+                        },
                         onPlayClick = { track, pos ->
-                            val originalTrack = body.tracks[pos]
-                            if (originalTrack.type == "playlist") {
+                            if (track.type == "playlist") {
                                 onPlaylistSelected?.invoke(track.id)
                             } else {
                                 val currentPlayingId = PlayerManager.currentQueue.getOrNull(PlayerManager.currentIndex)?.id
@@ -489,9 +493,6 @@ class DiscoverFragment : Fragment() {
                                 binding.selectionBar.visibility = View.VISIBLE
                                 binding.tvSelectionCount.text = "$count şarkı seçildi"
                             }
-                        },
-                        isPlaylistCheck = { pos -> 
-                           if (pos < body.tracks.size) body.tracks[pos].type == "playlist" else false
                         }
                     )
                     binding.rvTracks.adapter = trackAdapter
