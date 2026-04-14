@@ -34,13 +34,11 @@ import java.util.concurrent.TimeUnit
 
 class PlaylistImportFragment : Fragment() {
 
-    // Dışarıdan set edilecek callback'ler
     var onBack: (() -> Unit)? = null
     var onDownloadTrack: ((Track) -> Unit)? = null
 
     private lateinit var youtubeApi: YouTubeApi
 
-    // UI elemanları (inflate sonrası atanır)
     private lateinit var btnBack: ImageButton
     private lateinit var btnLoad: Button
     private lateinit var etPlaylistUrl: EditText
@@ -83,7 +81,6 @@ class PlaylistImportFragment : Fragment() {
             setPadding(pad, pad, pad, pad)
         }
 
-        // Toolbar satırı
         val toolbar = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             layoutParams = LinearLayout.LayoutParams(
@@ -111,7 +108,6 @@ class PlaylistImportFragment : Fragment() {
         toolbar.addView(tvTitle)
         root.addView(toolbar)
 
-        // URL giriş satırı
         val urlRow = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             val vp = (12 * resources.displayMetrics.density).toInt()
@@ -137,7 +133,6 @@ class PlaylistImportFragment : Fragment() {
         urlRow.addView(btnLoad)
         root.addView(urlRow)
 
-        // Progress bar
         progressBar = ProgressBar(ctx).apply {
             visibility = View.GONE
             layoutParams = LinearLayout.LayoutParams(
@@ -151,7 +146,6 @@ class PlaylistImportFragment : Fragment() {
         }
         root.addView(progressBar)
 
-        // Playlist header (cover + başlık + bilgi)
         headerLayout = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             visibility = View.GONE
@@ -193,7 +187,6 @@ class PlaylistImportFragment : Fragment() {
         headerLayout.addView(headerText)
         root.addView(headerLayout)
 
-        // Aksiyon butonları
         val actionRow = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             val vp = (8 * resources.displayMetrics.density).toInt()
@@ -224,7 +217,6 @@ class PlaylistImportFragment : Fragment() {
         actionRow.addView(btnAddToPlaylist)
         root.addView(actionRow)
 
-        // Boş durum metni
         tvEmpty = TextView(ctx).apply {
             text = "Playlist URL'ini girin ve 'Getir' butonuna basın"
             textSize = 14f
@@ -240,7 +232,6 @@ class PlaylistImportFragment : Fragment() {
         }
         root.addView(tvEmpty)
 
-        // RecyclerView
         recyclerView = RecyclerView(ctx).apply {
             layoutManager = LinearLayoutManager(ctx)
             layoutParams = LinearLayout.LayoutParams(
@@ -300,12 +291,10 @@ class PlaylistImportFragment : Fragment() {
         btnSelectAll.setOnClickListener {
             val tracks = playlistData?.tracks ?: return@setOnClickListener
             if (selectedIds.size == tracks.size) {
-                // Hepsini kaldır
                 selectedIds.clear()
                 btnSelectAll.text = "Tümünü Seç"
             } else {
-                // Hepsini seç
-                selectedIds.addAll(tracks.map { it.videoId })
+                selectedIds.addAll(tracks.map { it.realId })
                 btnSelectAll.text = "Seçimi Kaldır"
             }
             importAdapter?.notifyDataSetChanged()
@@ -317,7 +306,7 @@ class PlaylistImportFragment : Fragment() {
                 return@setOnClickListener
             }
             val tracks = playlistData?.tracks ?: return@setOnClickListener
-            val toDownload = tracks.filter { it.videoId in selectedIds }
+            val toDownload = tracks.filter { it.realId in selectedIds }
             toDownload.forEach { result ->
                 val track = result.toTrack()
                 onDownloadTrack?.invoke(track)
@@ -338,7 +327,6 @@ class PlaylistImportFragment : Fragment() {
         }
     }
 
-    // YouTube URL'inden playlist ID'sini çıkar
     private fun extractPlaylistId(input: String): String? {
         if (input.startsWith("PL") || input.startsWith("RD") || input.startsWith("UU")) {
             return input
@@ -391,7 +379,6 @@ class PlaylistImportFragment : Fragment() {
     }
 
     private fun showPlaylist(data: PlaylistInfoResponse) {
-        // Header
         tvPlaylistTitle.text = data.title
         tvPlaylistInfo.text = "${data.author} · ${data.tracks.size} şarkı"
         if (data.thumbnail.isNotEmpty()) {
@@ -401,18 +388,14 @@ class PlaylistImportFragment : Fragment() {
             }
         }
         headerLayout.visibility = View.VISIBLE
-
-        // Aksiyon satırı
         view?.findViewWithTag<LinearLayout>("actionRow")?.visibility = View.VISIBLE
 
-        // Adapter
         importAdapter = PlaylistImportAdapter(
             tracks = data.tracks,
             selectedIds = selectedIds,
             onToggle = { id ->
                 if (selectedIds.contains(id)) selectedIds.remove(id)
                 else selectedIds.add(id)
-                // Tümünü seç butonunu güncelle
                 btnSelectAll.text =
                     if (selectedIds.size == data.tracks.size) "Seçimi Kaldır" else "Tümünü Seç"
             }
@@ -425,15 +408,13 @@ class PlaylistImportFragment : Fragment() {
         lifecycleScope.launch {
             val db = AppDatabase.getInstance(requireContext())
             val playlists = withContext(Dispatchers.IO) {
-                // Flow'dan tek seferlik liste al
                 var result = emptyList<com.example.musicplayer.db.PlaylistEntity>()
                 val job = launch(Dispatchers.IO) {
                     db.playlistDao().getAllPlaylists().collect {
                         result = it
                     }
                 }
-                // İlk emit'i al ve durdur
-                kotlinx.coroutines.delay(100)
+                kotlinx.coroutines.delay(200)
                 job.cancel()
                 result
             }
@@ -461,21 +442,22 @@ class PlaylistImportFragment : Fragment() {
 
     private fun addSelectedToPlaylist(playlist: PlaylistEntity) {
         val tracks = playlistData?.tracks ?: return
-        val toAdd = tracks.filter { it.videoId in selectedIds }
+        val toAdd = tracks.filter { it.realId in selectedIds }
 
         lifecycleScope.launch(Dispatchers.IO) {
             val db = AppDatabase.getInstance(requireContext())
             var added = 0
             toAdd.forEach { result ->
-                val alreadyIn = db.playlistSongDao().isSongInPlaylist(playlist.id, result.videoId) > 0
+                val vId = result.realId
+                val alreadyIn = db.playlistSongDao().isSongInPlaylist(playlist.id, vId) > 0
                 if (!alreadyIn) {
                     db.playlistSongDao().insertSong(
                         PlaylistSongEntity(
                             playlistId = playlist.id,
-                            videoId = result.videoId,
-                            title = result.title,
-                            author = result.author,
-                            thumbnail = result.thumbnails,
+                            videoId = vId,
+                            title = result.title ?: "Bilinmeyen",
+                            author = result.author ?: "Bilinmeyen",
+                            thumbnail = result.realThumbnail,
                             duration = result.duration
                         )
                     )
@@ -493,20 +475,17 @@ class PlaylistImportFragment : Fragment() {
         }
     }
 
-    // InvidiousSearchResult -> Track dönüşümü (download için)
     private fun InvidiousSearchResult.toTrack() = Track(
-        id = videoId,
-        name = title,
-        artistName = author,
-        image = thumbnails,
+        id = realId,
+        name = title ?: "Bilinmeyen",
+        artistName = author ?: "Bilinmeyen",
+        image = realThumbnail,
         audio = "",
         duration = duration,
-        videoId = videoId,
-        type = "video" // Yeni eklenen alan
+        videoId = realId,
+        type = "video"
     )
 }
-
-// ─── Adapter ──────────────────────────────────────────────────────────────────
 
 class PlaylistImportAdapter(
     private val tracks: List<InvidiousSearchResult>,
@@ -582,24 +561,25 @@ class PlaylistImportAdapter(
 
     override fun onBindViewHolder(holder: VH, position: Int) {
         val track = tracks[position]
-        holder.tvTitle.text = track.title
-        holder.tvAuthor.text = track.author
-        holder.checkbox.isChecked = track.videoId in selectedIds
+        val vId = track.realId
+        holder.tvTitle.text = track.title ?: ""
+        holder.tvAuthor.text = track.author ?: ""
+        holder.checkbox.isChecked = vId in selectedIds
 
-        if (track.thumbnails.isNotEmpty()) {
-            holder.ivThumb.load(track.thumbnails) {
+        val thumb = track.realThumbnail
+        if (thumb.isNotEmpty()) {
+            holder.ivThumb.load(thumb) {
                 transformations(RoundedCornersTransformation(6f))
                 placeholder(android.R.drawable.ic_menu_gallery)
             }
         }
 
-        // Satıra tıklayınca checkbox toggle
         holder.itemView.setOnClickListener {
-            onToggle(track.videoId)
-            holder.checkbox.isChecked = track.videoId in selectedIds
+            onToggle(vId)
+            holder.checkbox.isChecked = vId in selectedIds
         }
         holder.checkbox.setOnClickListener {
-            onToggle(track.videoId)
+            onToggle(vId)
         }
     }
 

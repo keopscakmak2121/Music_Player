@@ -28,7 +28,7 @@ class TrackAdapter(
 
     private val downloadMap = mutableMapOf<Long, Int>()
     private val progressMap = mutableMapOf<Int, Int>()
-    private val playlistMap = mutableMapOf<Int, Boolean>() // Pozisyon -> Listede mi?
+    private val playlistMap = mutableMapOf<Int, Boolean>()
     private var playingPosition: Int = -1
     private var isLoadingMore = false
 
@@ -82,7 +82,7 @@ class TrackAdapter(
 
             root.setOnClickListener {
                 if (selectionMode) toggleSelection(position)
-                else onPlayClick(track, position)
+                else onTrackClick(track)
             }
 
             root.setOnLongClickListener {
@@ -95,10 +95,10 @@ class TrackAdapter(
                 true
             }
 
-            // Playlist ise indirme ve listeye ekleme butonlarını gizle, yerine liste ikonu koy
-            val isPlaylist = track.type == "playlist"
+            // Playlist kontrolü (Büyük/küçük harf duyarsız)
+            val isPlaylist = track.type.equals("playlist", ignoreCase = true)
             if (isPlaylist) {
-                btnDownload.setImageResource(android.R.drawable.ic_menu_agenda) // Liste ikonu
+                btnDownload.setImageResource(android.R.drawable.ic_menu_agenda)
                 btnDownload.isEnabled = true
                 btnAddToPlaylist.visibility = View.GONE
                 tvDuration.text = "Liste"
@@ -106,7 +106,6 @@ class TrackAdapter(
                 btnAddToPlaylist.visibility = View.VISIBLE
                 btnDownload.setImageResource(android.R.drawable.stat_sys_download)
                 
-                // Listede mi kontrolü
                 val isInPlaylist = playlistMap[position] ?: false
                 btnAddToPlaylist.setImageResource(
                     if (isInPlaylist) android.R.drawable.checkbox_on_background 
@@ -117,7 +116,7 @@ class TrackAdapter(
 
             btnDownload.setOnClickListener {
                 if (selectionMode) return@setOnClickListener
-                onDownloadClick(track, position)
+                if (isPlaylist) onTrackClick(track) else onDownloadClick(track, position)
             }
 
             btnAddToPlaylist.setOnClickListener {
@@ -126,7 +125,7 @@ class TrackAdapter(
             }
         }
         bindPlayingState(holder.binding, position)
-        if (track.type != "playlist") {
+        if (!track.type.equals("playlist", ignoreCase = true)) {
             bindDownloadState(holder.binding, position)
         } else {
             holder.binding.downloadProgress.visibility = View.GONE
@@ -153,7 +152,7 @@ class TrackAdapter(
                     btnDownload.isEnabled = true
                     btnPlay.isEnabled = true
                 }
-                progress == -3 -> { // Hazırlanıyor... (Play'e basınca)
+                progress == -3 -> {
                     downloadProgress.visibility = View.VISIBLE
                     downloadProgress.isIndeterminate = true
                     tvDownloadPercent.visibility = View.VISIBLE
@@ -161,14 +160,14 @@ class TrackAdapter(
                     btnDownload.isEnabled = false
                     btnPlay.isEnabled = false
                 }
-                progress == -2 -> { // Bekliyor... (İndirmeye basınca)
+                progress == -2 -> {
                     downloadProgress.visibility = View.VISIBLE
                     downloadProgress.isIndeterminate = true
                     tvDownloadPercent.visibility = View.VISIBLE
                     tvDownloadPercent.text = "Bekliyor..."
                     btnDownload.isEnabled = true 
                 }
-                progress == -1 -> { // İndirildi
+                progress == -1 -> {
                     downloadProgress.visibility = View.GONE
                     tvDownloadPercent.visibility = View.VISIBLE
                     tvDownloadPercent.text = "✓ İndirildi"
@@ -176,7 +175,7 @@ class TrackAdapter(
                     btnDownload.isEnabled = false
                     btnPlay.isEnabled = true
                 }
-                else -> { // İndiriliyor %...
+                else -> {
                     downloadProgress.visibility = View.VISIBLE
                     downloadProgress.isIndeterminate = false
                     downloadProgress.progress = progress
@@ -188,8 +187,6 @@ class TrackAdapter(
         }
     }
 
-    // --- Selection and Helper Methods ---
-    
     private fun toggleSelection(position: Int) {
         if (selectedPositions.contains(position)) selectedPositions.remove(position)
         else selectedPositions.add(position)
@@ -201,9 +198,7 @@ class TrackAdapter(
     fun toggleSelection(videoId: String) {
         val position = tracks.indexOfFirst { it.id == videoId }
         if (position != -1) {
-            if (!selectionMode) {
-                enterSelectionMode()
-            }
+            if (!selectionMode) enterSelectionMode()
             toggleSelection(position)
         }
     }
@@ -238,7 +233,6 @@ class TrackAdapter(
     }
 
     fun notifyPlayingStateChanged() { if (playingPosition >= 0) notifyItemChanged(playingPosition) }
-    
     fun registerLoading(position: Int) { progressMap[position] = -3; notifyItemChanged(position) }
     fun clearLoading(position: Int) { if (progressMap[position] == -3) progressMap.remove(position); notifyItemChanged(position) }
     fun registerPreparing(position: Int) { progressMap[position] = -2; notifyItemChanged(position) }

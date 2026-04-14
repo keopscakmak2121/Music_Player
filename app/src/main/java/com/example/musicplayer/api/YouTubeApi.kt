@@ -32,13 +32,20 @@ data class SearchResponse(
 )
 
 data class InvidiousSearchResult(
-    @SerializedName("id") val videoId: String,
-    @SerializedName("title") val title: String,
-    @SerializedName("author") val author: String,
-    @SerializedName("thumbnail") val thumbnails: String,
-    @SerializedName("duration") val duration: Int,
-    @SerializedName("type") val type: String? = "video" // "video" veya "playlist"
-)
+    @SerializedName("id") val id: String?,
+    @SerializedName("videoId") val videoId: String?,
+    @SerializedName("playlistId") val playlistId: String?,
+    @SerializedName("title") val title: String?,
+    @SerializedName("author") val author: String?,
+    @SerializedName("thumbnail") val thumbnail: String?,
+    @SerializedName("thumbnails") val thumbnails: String?, // Bazı API'lar thumbnails kullanıyor
+    @SerializedName("duration") val duration: Int = 0,
+    @SerializedName("type") val type: String? = "video"
+) {
+    // Hangisi doluysa onu döndüren yardımcı fonksiyonlar
+    val realId: String get() = playlistId ?: videoId ?: id ?: ""
+    val realThumbnail: String get() = thumbnail ?: thumbnails ?: ""
+}
 
 data class InvidiousVideoInfo(
     @SerializedName("url") val url: String
