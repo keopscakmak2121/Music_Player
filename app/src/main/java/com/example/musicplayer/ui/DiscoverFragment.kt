@@ -19,12 +19,12 @@ import android.view.inputmethod.EditorInfo
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import androidx.fragment.app.Fragment
-import androidx.lifecycle.asLiveData
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.example.musicplayer.PlayerManager
 import com.example.musicplayer.TrackAdapter
+import com.example.musicplayer.api.InvidiousSearchResult
 import com.example.musicplayer.api.InvidiousVideoInfo
 import com.example.musicplayer.api.SearchResponse
 import com.example.musicplayer.api.YouTubeApi
@@ -177,7 +177,6 @@ class DiscoverFragment : Fragment() {
 
         PlayerManager.addPlaybackStateListener(playbackStateListener)
         
-        // Başlangıçta geçmişi göster
         if (currentTracks.isEmpty()) {
             showSearchHistory()
         }
@@ -441,7 +440,16 @@ class DiscoverFragment : Fragment() {
                 hasMore = body.hasMore || (body.tracks.size >= searchCount && body.tracks.isNotEmpty())
                 
                 val newTracks = body.tracks.map {
-                    Track(it.videoId, it.title, it.author, it.thumbnails, "", it.duration, it.videoId, it.type ?: "video")
+                    Track(
+                        id = it.videoId,
+                        name = it.title ?: "Bilinmeyen",
+                        artistName = it.author ?: "Bilinmeyen",
+                        image = it.thumbnails,
+                        audio = "",
+                        duration = it.duration,
+                        videoId = it.videoId,
+                        type = it.type ?: "video"
+                    )
                 }
 
                 if (reset) {
@@ -449,7 +457,7 @@ class DiscoverFragment : Fragment() {
                     trackAdapter = TrackAdapter(
                         currentTracks,
                         onTrackClick = { track ->
-                            if (track.type == "playlist") {
+                            if (track.type.equals("playlist", ignoreCase = true)) {
                                 onPlaylistSelected?.invoke(track.id)
                             } else {
                                 val pos = currentTracks.indexOfFirst { it.id == track.id }
@@ -464,14 +472,14 @@ class DiscoverFragment : Fragment() {
                             }
                         },
                         onDownloadClick = { track, pos -> 
-                            if (track.type == "playlist") {
+                            if (track.type.equals("playlist", ignoreCase = true)) {
                                 onPlaylistSelected?.invoke(track.id)
                             } else {
                                 showDownloadOptions(track, pos)
                             }
                         },
                         onPlayClick = { track, pos ->
-                            if (track.type == "playlist") {
+                            if (track.type.equals("playlist", ignoreCase = true)) {
                                 onPlaylistSelected?.invoke(track.id)
                             } else {
                                 val currentPlayingId = PlayerManager.currentQueue.getOrNull(PlayerManager.currentIndex)?.id
@@ -558,42 +566,46 @@ class DiscoverFragment : Fragment() {
 
     private fun showAddToPlaylistDialog(track: Track) {
         val db = AppDatabase.getInstance(requireContext())
-        db.playlistDao().getAllPlaylists().asLiveData().observe(viewLifecycleOwner) { playlists ->
-            if (playlists.isEmpty()) {
-                Toast.makeText(context, "Henüz liste oluşturmadınız.", Toast.LENGTH_SHORT).show()
-                return@observe
-            }
-            val names = playlists.map { it.name }.toTypedArray()
-            AlertDialog.Builder(requireContext())
-                .setTitle("Listeye Ekle")
-                .setItems(names) { _, which ->
-                    val selectedPlaylist = playlists[which]
-                    lifecycleScope.launch(Dispatchers.IO) {
-                        val exists = db.playlistSongDao().isSongInPlaylist(selectedPlaylist.id, track.id)
-                        if (exists > 0) {
-                            withContext(Dispatchers.Main) {
-                                Toast.makeText(context, "Bu şarkı zaten listede var.", Toast.LENGTH_SHORT).show()
-                            }
-                        } else {
-                            db.playlistSongDao().insertSong(
-                                PlaylistSongEntity(
-                                    playlistId = selectedPlaylist.id,
-                                    videoId = track.id,
-                                    title = track.name,
-                                    author = track.artistName,
-                                    thumbnail = track.image,
-                                    duration = track.duration
+        lifecycleScope.launch(Dispatchers.IO) {
+            val playlists = db.playlistDao().getAllPlaylistsOnce()
+            withContext(Dispatchers.Main) {
+                if (!isAdded || _binding == null) return@withContext
+                if (playlists.isEmpty()) {
+                    Toast.makeText(context, "Henüz liste oluşturmadınız.", Toast.LENGTH_SHORT).show()
+                    return@withContext
+                }
+                val names = playlists.map { it.name }.toTypedArray()
+                AlertDialog.Builder(requireContext())
+                    .setTitle("Listeye Ekle")
+                    .setItems(names) { _, which ->
+                        val selectedPlaylist = playlists[which]
+                        lifecycleScope.launch(Dispatchers.IO) {
+                            val exists = db.playlistSongDao().isSongInPlaylist(selectedPlaylist.id, track.id)
+                            if (exists > 0) {
+                                withContext(Dispatchers.Main) {
+                                    Toast.makeText(context, "Bu şarkı zaten listede var.", Toast.LENGTH_SHORT).show()
+                                }
+                            } else {
+                                db.playlistSongDao().insertSong(
+                                    PlaylistSongEntity(
+                                        playlistId = selectedPlaylist.id,
+                                        videoId = track.id,
+                                        title = track.name,
+                                        author = track.artistName,
+                                        thumbnail = track.image,
+                                        duration = track.duration
+                                    )
                                 )
-                            )
-                            withContext(Dispatchers.Main) {
-                                val pos = currentTracks.indexOfFirst { it.id == track.id }
-                                if (pos >= 0) trackAdapter?.markInPlaylist(pos)
-                                Toast.makeText(context, "Listeye eklendi ve indiriliyor.", Toast.LENGTH_SHORT).show()
-                                triggerDownload(track)
+                                withContext(Dispatchers.Main) {
+                                    val pos = currentTracks.indexOfFirst { it.id == track.id }
+                                    if (pos >= 0) trackAdapter?.markInPlaylist(pos)
+                                    Toast.makeText(context, "Listeye eklendi ve indiriliyor.", Toast.LENGTH_SHORT).show()
+                                    triggerDownload(track)
+                                }
                             }
                         }
-                    }
-                }.show()
+                    }.show()
+            }
         }
     }
 
@@ -680,7 +692,17 @@ class DiscoverFragment : Fragment() {
         lifecycleScope.launch(Dispatchers.IO) {
             val tempFile = getTempFile(track)
             if (tempFile.exists() && tempFile.length() > 0) {
-                val resumeInfo = DownloadResumeInfo(File(requireContext().cacheDir, "temp_${track.id}"), tempFile.length(), tempFile.length() + 1, tempFile)
+                val downloadedBytes = tempFile.length()
+                // Gerçek toplam boyutu HEAD isteğiyle al
+                val url = buildDownloadUrl(track.id, "mp3", null)
+                val totalBytes = try {
+                    val req = Request.Builder().url(url).head().build()
+                    val resp = downloadClient.newCall(req).execute()
+                    resp.headers["Content-Length"]?.toLongOrNull() ?: (downloadedBytes + 1)
+                } catch (e: Exception) {
+                    downloadedBytes + 1
+                }
+                val resumeInfo = DownloadResumeInfo(File(requireContext().cacheDir, "temp_${track.id}"), downloadedBytes, totalBytes, tempFile)
                 withContext(Dispatchers.Main) { startResumableDownload(track, position, "mp3", null, resumeInfo) }
             }
         }
@@ -880,10 +902,12 @@ class DiscoverFragment : Fragment() {
                 }
                 val collection = if (format == "mp3") MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY) else MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
                 val uri = ctx.contentResolver.insert(collection, values)
-                uri?.let {
-                    ctx.contentResolver.openOutputStream(it)?.use { outputStream -> tempFile.inputStream().use { inputStream -> inputStream.copyTo(outputStream) } }
-                    tempFile.delete(); it.toString()
-                }; null
+                if (uri != null) {
+                    ctx.contentResolver.openOutputStream(uri)?.use { outputStream -> tempFile.inputStream().use { inputStream -> inputStream.copyTo(outputStream) } }
+                    tempFile.delete()
+                    // API Q+ üzerinde gerçek dosya yolu yoktur; geçici bir sentinel File döndür
+                    File(ctx.cacheDir, fileName)
+                } else null
             } else {
                 val dir = File(if (format == "mp3") Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC) else Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "Melodify")
                 dir.mkdirs(); val finalFile = File(dir, fileName); tempFile.copyTo(finalFile, overwrite = true); tempFile.delete()

@@ -31,6 +31,8 @@ object PlayerManager {
     private var controller: MediaController? = null
     
     private val urlCache = mutableMapOf<String, String>()
+    private val urlCacheTime = mutableMapOf<String, Long>()
+    private val URL_CACHE_TTL_MS = 90_000L // YouTube stream URL'leri ~5-6 dk geçerli, 90 sn güvenli TTL
 
     var urlResolver: ((Track, (String) -> Unit) -> Unit)? = null
 
@@ -208,9 +210,12 @@ object PlayerManager {
         val nextIdx = getNextIndex()
         if (nextIdx != -1 && nextIdx != currentIndex && nextIdx < currentQueue.size) {
             val nextTrack = currentQueue[nextIdx]
-            if (!urlCache.containsKey(nextTrack.id) && (nextTrack.audio.isEmpty() || nextTrack.audio.startsWith("http"))) {
+            val cacheAge = System.currentTimeMillis() - (urlCacheTime[nextTrack.id] ?: 0L)
+            val cacheValid = urlCache.containsKey(nextTrack.id) && cacheAge < URL_CACHE_TTL_MS
+            if (!cacheValid && (nextTrack.audio.isEmpty() || nextTrack.audio.startsWith("http"))) {
                 urlResolver?.invoke(nextTrack) { url ->
                     urlCache[nextTrack.id] = url
+                    urlCacheTime[nextTrack.id] = System.currentTimeMillis()
                 }
             }
         }
@@ -222,14 +227,22 @@ object PlayerManager {
             return
         }
 
-        urlCache[track.id]?.let { cachedUrl ->
+        val cachedUrl = urlCache[track.id]
+        val cacheAge = System.currentTimeMillis() - (urlCacheTime[track.id] ?: 0L)
+        if (cachedUrl != null && cacheAge < URL_CACHE_TTL_MS) {
             play(track, cachedUrl)
             return
+        }
+        // Süresi dolmuş cache'i temizle
+        if (cachedUrl != null) {
+            urlCache.remove(track.id)
+            urlCacheTime.remove(track.id)
         }
 
         urlResolver?.invoke(track) { url -> 
             if (url.isNotEmpty()) {
                 urlCache[track.id] = url
+                urlCacheTime[track.id] = System.currentTimeMillis()
                 play(track, url)
             } else {
                 onError?.invoke("Şarkı URL'si alınamadı: ${track.name}")
