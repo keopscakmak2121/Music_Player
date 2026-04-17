@@ -38,7 +38,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var playlistDetailFragment: PlaylistDetailFragment
     private lateinit var fullPlayerFragment: FullPlayerFragment
     private lateinit var playlistImportFragment: PlaylistImportFragment
-    private lateinit var recentlyPlayedFragment: RecentlyPlayedFragment
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private var isUserSeeking = false
@@ -119,7 +118,6 @@ class MainActivity : AppCompatActivity() {
             playlistDetailFragment = PlaylistDetailFragment()
             fullPlayerFragment = FullPlayerFragment()
             playlistImportFragment = PlaylistImportFragment()
-            recentlyPlayedFragment = RecentlyPlayedFragment()
 
             supportFragmentManager.beginTransaction()
                 .add(R.id.fragmentContainer, discoverFragment, "discover")
@@ -128,7 +126,6 @@ class MainActivity : AppCompatActivity() {
                 .add(R.id.fragmentContainer, settingsFragment, "settings").hide(settingsFragment)
                 .add(R.id.fragmentContainer, playlistDetailFragment, "playlist_detail").hide(playlistDetailFragment)
                 .add(R.id.fragmentContainer, playlistImportFragment, "playlist_import").hide(playlistImportFragment)
-                .add(R.id.fragmentContainer, recentlyPlayedFragment, "recently_played").hide(recentlyPlayedFragment)
                 .add(R.id.fullPlayerContainer, fullPlayerFragment, "full_player").hide(fullPlayerFragment)
                 .commit()
         } else {
@@ -138,7 +135,6 @@ class MainActivity : AppCompatActivity() {
             settingsFragment = supportFragmentManager.findFragmentByTag("settings") as SettingsFragment
             playlistDetailFragment = supportFragmentManager.findFragmentByTag("playlist_detail") as PlaylistDetailFragment
             playlistImportFragment = (supportFragmentManager.findFragmentByTag("playlist_import") as? PlaylistImportFragment) ?: PlaylistImportFragment()
-            recentlyPlayedFragment = (supportFragmentManager.findFragmentByTag("recently_played") as? RecentlyPlayedFragment) ?: RecentlyPlayedFragment()
             fullPlayerFragment = supportFragmentManager.findFragmentByTag("full_player") as FullPlayerFragment
         }
     }
@@ -147,7 +143,6 @@ class MainActivity : AppCompatActivity() {
         binding.bottomNav.setOnItemSelectedListener { item ->
             val show = when (item.itemId) {
                 R.id.nav_discover -> discoverFragment
-                R.id.nav_recently_played -> recentlyPlayedFragment
                 R.id.nav_playlists -> playlistsFragment
                 R.id.nav_downloads -> {
                     downloadsFragment.loadDownloadedFiles()
@@ -156,7 +151,7 @@ class MainActivity : AppCompatActivity() {
                 R.id.nav_settings -> settingsFragment
                 else -> return@setOnItemSelectedListener false
             }
-            val all = listOf(discoverFragment, recentlyPlayedFragment, playlistsFragment, downloadsFragment, settingsFragment, playlistDetailFragment, playlistImportFragment)
+            val all = listOf(discoverFragment, playlistsFragment, downloadsFragment, settingsFragment, playlistDetailFragment, playlistImportFragment)
             val tx = supportFragmentManager.beginTransaction()
             all.forEach { if (it == show) tx.show(it) else tx.hide(it) }
             tx.commit()
@@ -175,8 +170,6 @@ class MainActivity : AppCompatActivity() {
                 updateMiniPlayer(track)
                 discoverFragment.updatePlayingPosition(index)
                 playlistDetailFragment.updatePlayingPosition(index)
-                // Şarkı değiştiğinde son dinlenenlere kaydet
-                RecentlyPlayedFragment.saveTrack(this@MainActivity, track)
             }
             PlayerManager.addPlaybackStateListener(playbackStateListener)
         }, MoreExecutors.directExecutor())
@@ -205,7 +198,6 @@ class MainActivity : AppCompatActivity() {
     private fun wireCallbacks() {
         val playCallback: (Track, String) -> Unit = { track, url -> playTrack(track, url) }
         discoverFragment.onTrackSelected = playCallback
-        recentlyPlayedFragment.onTrackSelected = playCallback
         supportFragmentManager.setFragmentResultListener("download_complete", this) { _, _ ->
             downloadsFragment.loadDownloadedFiles()
         }
@@ -230,7 +222,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun openPlaylistImport() {
-        val allFragments = listOf(discoverFragment, playlistsFragment, downloadsFragment, settingsFragment, playlistDetailFragment, recentlyPlayedFragment)
+        val allFragments = listOf(discoverFragment, playlistsFragment, downloadsFragment, settingsFragment, playlistDetailFragment)
         val tx = supportFragmentManager.beginTransaction()
         allFragments.forEach { tx.hide(it) }
         tx.show(playlistImportFragment).commit()
@@ -238,7 +230,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun openPlaylistImportById(playlistId: String) {
-        val allFragments = listOf(discoverFragment, playlistsFragment, downloadsFragment, settingsFragment, playlistDetailFragment, recentlyPlayedFragment)
+        val allFragments = listOf(discoverFragment, playlistsFragment, downloadsFragment, settingsFragment, playlistDetailFragment)
         val tx = supportFragmentManager.beginTransaction()
         allFragments.forEach { tx.hide(it) }
         tx.show(playlistImportFragment).commit()
@@ -281,7 +273,7 @@ class MainActivity : AppCompatActivity() {
     private fun openPlaylistDetail(playlist: PlaylistEntity) {
         playlistDetailFragment.playlistId = playlist.id
         playlistDetailFragment.playlistName = playlist.name
-        val all = listOf(discoverFragment, playlistsFragment, downloadsFragment, settingsFragment, recentlyPlayedFragment)
+        val all = listOf(discoverFragment, playlistsFragment, downloadsFragment, settingsFragment)
         val tx = supportFragmentManager.beginTransaction()
         all.forEach { tx.hide(it) }
         tx.show(playlistDetailFragment).commit()
@@ -298,7 +290,6 @@ class MainActivity : AppCompatActivity() {
         c.prepare()
         c.play()
         updateMiniPlayer(track)
-        RecentlyPlayedFragment.saveTrack(this, track)
     }
 
     private fun updateMiniPlayer(track: Track) {

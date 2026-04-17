@@ -441,13 +441,13 @@ class DiscoverFragment : Fragment() {
                 
                 val newTracks = body.tracks.map {
                     Track(
-                        id = it.videoId,
+                        id = it.realId,
                         name = it.title ?: "Bilinmeyen",
                         artistName = it.author ?: "Bilinmeyen",
-                        image = it.thumbnails,
+                        image = it.realThumbnail,
                         audio = "",
                         duration = it.duration,
-                        videoId = it.videoId,
+                        videoId = it.realId,
                         type = it.type ?: "video"
                     )
                 }
@@ -735,7 +735,7 @@ class DiscoverFragment : Fragment() {
                 } catch (e: Exception) {
                     Log.e(TAG, "Download error: ${e.message}", e)
                     retryCount++
-                    if (retryCount < MAX_RETRY_COUNT && !cancelled.get()) delay(RETRY_DELAY_MS)
+                    if (retryCount < MAX_RETRY_COUNT) delay(RETRY_DELAY_MS)
                 }
             }
             if (!success && !cancelled.get()) {
