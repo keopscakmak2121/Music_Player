@@ -18,8 +18,8 @@
 
     <!-- Metin -->
     <color name="text_primary">#F0EEFF</color>
-    <color name="text_secondary">#8A84BB</color>
-    <color name="text_hint">#44405A</color>
+    <color name="text_secondary">#ABA4D1</color>
+    <color name="text_hint">#6B6682</color>
 
     <!-- Durum renkleri -->
     <color name="success">#3DCC6B</color>
